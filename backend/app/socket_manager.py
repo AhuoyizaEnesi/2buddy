@@ -25,6 +25,7 @@ anthropic_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 session_timers = {}
 session_stuck_votes = {}
 session_check_counts = {}
+lobby_users = {}
 
 
 async def get_redis():
@@ -126,6 +127,19 @@ async def run_auto_checks(room_code: str, problem_description: str):
     session_check_counts.pop(room_code, None)
 
 
+async def broadcast_lobby(subject: str):
+    users = lobby_users.get(subject, {})
+    user_list = [
+        {"sid": sid, "username": data["username"], "joined_at": data["joined_at"]}
+        for sid, data in users.items()
+    ]
+    await sio.emit("lobby_update", {
+        "subject": subject,
+        "users": user_list,
+        "count": len(user_list)
+    }, room=f"lobby_{subject}")
+
+
 @sio.event
 async def connect(sid, environ):
     print(f"Client connected: {sid}")
@@ -137,12 +151,103 @@ async def disconnect(sid):
     r = await get_redis()
     room_code = await r.get(f"sid_room:{sid}")
     username = await r.get(f"sid_user:{sid}")
+    subject = await r.get(f"sid_lobby:{sid}")
+
     if room_code:
         await sio.leave_room(sid, room_code)
         await sio.emit("partner_disconnected", {"username": username}, room=room_code)
         await r.delete(f"sid_room:{sid}")
         await r.delete(f"sid_user:{sid}")
+
+    if subject:
+        if subject in lobby_users and sid in lobby_users[subject]:
+            del lobby_users[subject][sid]
+        await sio.leave_room(sid, f"lobby_{subject}")
+        await r.delete(f"sid_lobby:{sid}")
+        await broadcast_lobby(subject)
+
     await r.aclose()
+
+
+@sio.event
+async def join_lobby(sid, data):
+    subject = data.get("subject", "").lower().strip()
+    username = data.get("username", "")
+
+    if not subject or not username:
+        return
+
+    await sio.enter_room(sid, f"lobby_{subject}")
+
+    if subject not in lobby_users:
+        lobby_users[subject] = {}
+
+    lobby_users[subject][sid] = {
+        "username": username,
+        "joined_at": asyncio.get_event_loop().time()
+    }
+
+    r = await get_redis()
+    await r.set(f"sid_lobby:{sid}", subject)
+    await r.aclose()
+
+    await broadcast_lobby(subject)
+
+
+@sio.event
+async def leave_lobby(sid, data):
+    subject = data.get("subject", "").lower().strip()
+
+    if subject in lobby_users and sid in lobby_users[subject]:
+        del lobby_users[subject][sid]
+
+    await sio.leave_room(sid, f"lobby_{subject}")
+
+    r = await get_redis()
+    await r.delete(f"sid_lobby:{sid}")
+    await r.aclose()
+
+    await broadcast_lobby(subject)
+
+
+@sio.event
+async def send_pair_request(sid, data):
+    target_sid = data.get("target_sid")
+    username = data.get("username")
+    subject = data.get("subject")
+
+    await sio.emit("pair_request", {
+        "from_sid": sid,
+        "from_username": username,
+        "subject": subject
+    }, to=target_sid)
+
+
+@sio.event
+async def accept_pair_request(sid, data):
+    from_sid = data.get("from_sid")
+    username = data.get("username")
+    subject = data.get("subject")
+
+    await sio.emit("pair_accepted", {
+        "from_sid": from_sid,
+        "accepted_by": username,
+        "subject": subject
+    }, to=from_sid)
+
+    await sio.emit("pair_confirmed", {
+        "subject": subject
+    }, to=sid)
+
+
+@sio.event
+async def decline_pair_request(sid, data):
+    from_sid = data.get("from_sid")
+    username = data.get("username")
+
+    await sio.emit("pair_declined", {
+        "declined_by": username
+    }, to=from_sid)
 
 
 @sio.event
@@ -203,6 +308,12 @@ async def clear_canvas(sid, data):
     room_code = data.get("room_code")
     await save_canvas_to_redis(room_code, "")
     await sio.emit("canvas_cleared", {}, room=room_code)
+
+
+@sio.event
+async def reaction(sid, data):
+    room_code = data.get("room_code")
+    await sio.emit("reaction", data, room=room_code, skip_sid=sid)
 
 
 @sio.event

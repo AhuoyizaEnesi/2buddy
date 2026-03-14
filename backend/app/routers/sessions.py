@@ -15,6 +15,80 @@ def generate_room_code(length=6):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
 
+@router.post("/create-direct", response_model=schemas.SessionOut)
+def create_direct_session(
+    data: schemas.SessionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    subject = data.subject.lower().strip()
+
+    room_code = generate_room_code()
+    while db.query(models.Session).filter(
+        models.Session.room_code == room_code
+    ).first():
+        room_code = generate_room_code()
+
+    problem = (
+        db.query(models.Problem)
+        .filter(models.Problem.subject == subject)
+        .order_by(func.random())
+        .first()
+    )
+
+    new_session = models.Session(
+        room_code=room_code,
+        subject=subject,
+        status="active",
+        problem_id=problem.id if problem else None
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    colors = ["#7F77DD", "#1D9E75"]
+    participant = models.SessionParticipant(
+        session_id=new_session.id,
+        user_id=current_user.id,
+        color=colors[0]
+    )
+    db.add(participant)
+    db.commit()
+    db.refresh(new_session)
+    return new_session
+
+
+@router.post("/join-direct/{session_id}", response_model=schemas.SessionOut)
+def join_direct_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    session = db.query(models.Session).filter(
+        models.Session.id == session_id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    existing = db.query(models.SessionParticipant).filter(
+        models.SessionParticipant.session_id == session_id,
+        models.SessionParticipant.user_id == current_user.id
+    ).first()
+
+    if not existing:
+        participant = models.SessionParticipant(
+            session_id=session_id,
+            user_id=current_user.id,
+            color="#1D9E75"
+        )
+        db.add(participant)
+        db.commit()
+
+    db.refresh(session)
+    return session
+
+
 @router.post("/join", response_model=schemas.SessionOut)
 def join_or_create_session(
     data: schemas.SessionCreate,
@@ -40,73 +114,24 @@ def join_or_create_session(
         ).first()
         return session
 
-    for attempt in range(3):
-        waiting_session = (
-            db.query(models.Session)
-            .filter(
-                models.Session.subject == subject,
-                models.Session.status == "waiting"
-            )
-            .filter(
-                ~models.Session.participants.any(
-                    models.SessionParticipant.user_id == current_user.id
-                )
-            )
-            .with_for_update()
-            .first()
-        )
-
-        if waiting_session:
-            existing_participants = (
-                db.query(models.SessionParticipant)
-                .filter(models.SessionParticipant.session_id == waiting_session.id)
-                .all()
-            )
-            used_colors = [p.color for p in existing_participants]
-            available_colors = [c for c in colors if c not in used_colors]
-            color = available_colors[0] if available_colors else colors[1]
-
-            participant = models.SessionParticipant(
-                session_id=waiting_session.id,
-                user_id=current_user.id,
-                color=color
-            )
-            db.add(participant)
-
-            problem = (
-                db.query(models.Problem)
-                .filter(models.Problem.subject == subject)
-                .order_by(func.random())
-                .first()
-            )
-
-            waiting_session.status = "active"
-            if problem:
-                waiting_session.problem_id = problem.id
-
-            try:
-                db.commit()
-                db.refresh(waiting_session)
-                return waiting_session
-            except Exception:
-                db.rollback()
-                if attempt < 2:
-                    time.sleep(0.1)
-                    continue
-                raise HTTPException(status_code=500, detail="Failed to join session, try again")
-
-        break
-
     room_code = generate_room_code()
     while db.query(models.Session).filter(
         models.Session.room_code == room_code
     ).first():
         room_code = generate_room_code()
 
+    problem = (
+        db.query(models.Problem)
+        .filter(models.Problem.subject == subject)
+        .order_by(func.random())
+        .first()
+    )
+
     new_session = models.Session(
         room_code=room_code,
         subject=subject,
-        status="waiting"
+        status="active",
+        problem_id=problem.id if problem else None
     )
     db.add(new_session)
     db.commit()
