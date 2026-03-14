@@ -6,6 +6,13 @@ import { sessionsAPI } from "@/app/lib/api";
 import { getUser, isAuthenticated, clearAuth } from "@/app/lib/auth";
 import Button from "@/app/components/ui/Button";
 
+interface User {
+  id: string;
+  username: string;
+  email: string;
+  created_at: string;
+}
+
 const subjects = [
   {
     id: "mathematics",
@@ -43,16 +50,18 @@ const subjects = [
 
 export default function LobbyPage() {
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [selectedSubject, setSelectedSubject] = useState("");
   const [loading, setLoading] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState("");
-  const user = getUser();
 
   useEffect(() => {
     if (!isAuthenticated()) {
       router.push("/login");
+      return;
     }
+    setUser(getUser());
   }, [router]);
 
   const handleJoin = async () => {
@@ -92,7 +101,7 @@ export default function LobbyPage() {
       } catch {
         clearInterval(interval);
       }
-    }, 2000);
+    }, 1000);
 
     setTimeout(() => {
       clearInterval(interval);
@@ -198,9 +207,7 @@ export default function LobbyPage() {
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <div
-                      className={`w-2 h-2 rounded-full ${subject.dot}`}
-                    />
+                    <div className={`w-2 h-2 rounded-full ${subject.dot}`} />
                     <span className="text-sm font-medium text-gray-900">
                       {subject.label}
                     </span>

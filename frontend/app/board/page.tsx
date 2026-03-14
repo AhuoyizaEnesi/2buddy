@@ -6,7 +6,7 @@ import { sessionsAPI } from "@/app/lib/api";
 import { getUser, isAuthenticated } from "@/app/lib/auth";
 import { connectSocket, disconnectSocket } from "@/app/lib/socket";
 import Canvas, { CanvasRef } from "@/app/components/whiteboard/Canvas";
-import Toolbar, { Tool } from "@/app/components/whiteboard/Toolbar";
+import Toolbar, { Tool, Background } from "@/app/components/whiteboard/Toolbar";
 import AIPanel from "@/app/components/whiteboard/AIPanel";
 import ProblemPanel from "@/app/components/whiteboard/ProblemPanel";
 import Button from "@/app/components/ui/Button";
@@ -45,7 +45,6 @@ export default function BoardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session");
-
   const canvasRef = useRef<CanvasRef>(null);
   const user = getUser();
 
@@ -53,6 +52,7 @@ export default function BoardPage() {
   const [activeTool, setActiveTool] = useState<Tool>("pen");
   const [activeColor, setActiveColor] = useState("#1a1a1a");
   const [strokeSize, setStrokeSize] = useState(4);
+  const [activeBackground, setActiveBackground] = useState<Background>("dots");
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([]);
   const [stuckVotes, setStuckVotes] = useState(0);
   const [hasVotedStuck, setHasVotedStuck] = useState(false);
@@ -72,23 +72,13 @@ export default function BoardPage() {
   };
 
   useEffect(() => {
-    if (!isAuthenticated()) {
-      router.push("/login");
-      return;
-    }
-    if (!sessionId) {
-      router.push("/lobby");
-      return;
-    }
-
-    sessionsAPI.getSession(sessionId).then((res) => {
-      setSession(res.data);
-    });
+    if (!isAuthenticated()) { router.push("/login"); return; }
+    if (!sessionId) { router.push("/lobby"); return; }
+    sessionsAPI.getSession(sessionId).then((res) => setSession(res.data));
   }, [sessionId, router]);
 
   useEffect(() => {
     if (!session || !user) return;
-
     const socket = connectSocket();
 
     socket.on("connect", () => {
@@ -101,9 +91,7 @@ export default function BoardPage() {
     });
 
     socket.on("room_joined", ({ canvas_data }: { canvas_data: string }) => {
-      if (canvas_data && canvasRef.current) {
-        canvasRef.current.loadFromDataUrl(canvas_data);
-      }
+      if (canvas_data && canvasRef.current) canvasRef.current.loadFromDataUrl(canvas_data);
     });
 
     socket.on("partner_joined", ({ username, color }: { username: string; color: string }) => {
@@ -119,24 +107,15 @@ export default function BoardPage() {
     });
 
     socket.on("receive_stroke", (data: any) => {
-      if (canvasRef.current) {
-        canvasRef.current.applyRemoteStroke(data.stroke);
-      }
+      if (canvasRef.current) canvasRef.current.applyRemoteStroke(data.stroke);
     });
 
     socket.on("partner_cursor", (data: any) => {
-      setPartnerCursor({
-        x: data.x,
-        y: data.y,
-        color: data.color,
-        username: data.username,
-      });
+      setPartnerCursor({ x: data.x, y: data.y, color: data.color, username: data.username });
     });
 
     socket.on("canvas_cleared", () => {
-      if (canvasRef.current) {
-        canvasRef.current.clearCanvas();
-      }
+      if (canvasRef.current) canvasRef.current.clearCanvas();
       showNotification("Canvas cleared");
     });
 
@@ -154,28 +133,16 @@ export default function BoardPage() {
     socket.on("ai_feedback", (data: any) => {
       setAiMessages((prev) => {
         const filtered = prev.filter((m) => m.type !== "thinking");
-        if (data.type === "auto_check" && data.message === "NO_ERROR") {
-          return filtered;
-        }
+        if (data.type === "auto_check" && data.message === "NO_ERROR") return filtered;
         if (data.type === "auto_check") {
           setChecksRemaining((c) => Math.max(0, c - 1));
           showNotification("AI tutor has a note for you");
         }
-        return [
-          ...filtered,
-          {
-            type: data.type,
-            message: data.message,
-            check_number: data.check_number,
-            timestamp: new Date(),
-          },
-        ];
+        return [...filtered, { type: data.type, message: data.message, check_number: data.check_number, timestamp: new Date() }];
       });
     });
 
-    socket.on("stuck_vote_update", ({ votes }: { votes: number }) => {
-      setStuckVotes(votes);
-    });
+    socket.on("stuck_vote_update", ({ votes }: { votes: number }) => setStuckVotes(votes));
 
     return () => {
       socket.off("connect");
@@ -194,56 +161,32 @@ export default function BoardPage() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setSessionTimer((t) => {
-        if (t <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return t - 1;
-      });
+      setSessionTimer((t) => { if (t <= 1) { clearInterval(timer); return 0; } return t - 1; });
     }, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const handleStroke = useCallback(
-    (stroke: any) => {
-      if (!session) return;
-      const socket = connectSocket();
-      socket.emit("draw_stroke", {
-        room_code: session.room_code,
-        stroke,
-      });
-    },
-    [session]
-  );
+  const handleStroke = useCallback((stroke: any) => {
+    if (!session) return;
+    const socket = connectSocket();
+    socket.emit("draw_stroke", {
+      room_code: session.room_code,
+      stroke: { ...stroke, color: stroke.tool === "eraser" ? "#FFFFFF" : userColor },
+    });
+  }, [session, userColor]);
 
-  const handleCursorMove = useCallback(
-    (x: number, y: number) => {
-      if (!session || !user) return;
-      const socket = connectSocket();
-      socket.emit("cursor_move", {
-        room_code: session.room_code,
-        x,
-        y,
-        color: userColor,
-        username: user.username,
-      });
-    },
-    [session, user, userColor]
-  );
+  const handleCursorMove = useCallback((x: number, y: number) => {
+    if (!session || !user) return;
+    const socket = connectSocket();
+    socket.emit("cursor_move", { room_code: session.room_code, x, y, color: userColor, username: user.username });
+  }, [session, user, userColor]);
 
-  const handleCanvasUpdate = useCallback(
-    (dataUrl: string) => {
-      if (!session) return;
-      const socket = connectSocket();
-      const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-      socket.emit("canvas_update", {
-        room_code: session.room_code,
-        canvas_data: base64,
-      });
-    },
-    [session]
-  );
+  const handleCanvasUpdate = useCallback((dataUrl: string) => {
+    if (!session) return;
+    const socket = connectSocket();
+    const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
+    socket.emit("canvas_update", { room_code: session.room_code, canvas_data: base64 });
+  }, [session]);
 
   const handleClear = useCallback(() => {
     if (!session) return;
@@ -252,20 +195,14 @@ export default function BoardPage() {
     socket.emit("clear_canvas", { room_code: session.room_code });
   }, [session]);
 
-  const handleUndo = useCallback(() => {
-    canvasRef.current?.undo();
-  }, []);
+  const handleUndo = useCallback(() => { canvasRef.current?.undo(); }, []);
 
   const handleRequestReview = useCallback(() => {
     if (!session) return;
     const socket = connectSocket();
     const dataUrl = canvasRef.current?.getDataUrl() || "";
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-    socket.emit("request_review", {
-      room_code: session.room_code,
-      canvas_data: base64,
-      problem_description: session.problem?.description || "",
-    });
+    socket.emit("request_review", { room_code: session.room_code, canvas_data: base64, problem_description: session.problem?.description || "" });
   }, [session]);
 
   const handleVoteStuck = useCallback(() => {
@@ -274,12 +211,7 @@ export default function BoardPage() {
     const socket = connectSocket();
     const dataUrl = canvasRef.current?.getDataUrl() || "";
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-    socket.emit("vote_stuck", {
-      room_code: session.room_code,
-      username: user?.username,
-      canvas_data: base64,
-      problem_description: session.problem?.description || "",
-    });
+    socket.emit("vote_stuck", { room_code: session.room_code, username: user?.username, canvas_data: base64, problem_description: session.problem?.description || "" });
   }, [session, hasVotedStuck, user]);
 
   const handleEndSession = async () => {
@@ -289,61 +221,51 @@ export default function BoardPage() {
       await sessionsAPI.endSession(session.id);
       disconnectSocket();
       router.push("/lobby");
-    } catch {
-      setEnding(false);
-    }
+    } catch { setEnding(false); }
   };
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-3">
-          <svg
-            className="animate-spin w-8 h-8 text-violet-500"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-          </svg>
-          <p className="text-sm text-gray-500">Loading session...</p>
-        </div>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#f9fafb" }}>
+        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading session...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200 shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-base font-bold text-gray-900">2buddy</span>
-          <span className="text-xs text-gray-400 font-mono bg-gray-100 px-2 py-0.5 rounded">
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", backgroundColor: "#f3f4f6", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", backgroundColor: "#ffffff", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>2buddy</span>
+          <span style={{ fontSize: 11, color: "#9ca3af", fontFamily: "monospace", backgroundColor: "#f3f4f6", padding: "2px 8px", borderRadius: 6 }}>
             {session.room_code}
           </span>
-          <span className="text-xs text-gray-500 capitalize">
-            {session.subject}
-          </span>
+          <span style={{ fontSize: 12, color: "#6b7280", textTransform: "capitalize" }}>{session.subject}</span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {notification && (
-            <span className="text-xs bg-violet-50 text-violet-700 px-3 py-1 rounded-full border border-violet-200">
+            <span style={{ fontSize: 12, backgroundColor: "#f5f3ff", color: "#6d28d9", padding: "4px 12px", borderRadius: 20, border: "1px solid #ddd6fe" }}>
               {notification}
             </span>
           )}
-          <Button
-            variant="danger"
-            size="sm"
-            loading={ending}
-            onClick={handleEndSession}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: userColor }} />
+            <span style={{ fontSize: 12, color: "#6b7280" }}>{user?.username} (you)</span>
+          </div>
+          {partnerConnected && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: partnerColor }} />
+              <span style={{ fontSize: 12, color: "#6b7280" }}>{partnerName}</span>
+            </div>
+          )}
+          <Button variant="danger" size="sm" loading={ending} onClick={handleEndSession}>
             End session
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <ProblemPanel
           problem={session.problem}
           sessionTimer={sessionTimer}
@@ -354,32 +276,30 @@ export default function BoardPage() {
           userColor={userColor}
         />
 
-        <div className="flex flex-1 overflow-hidden relative">
-          <div className="flex items-center justify-center p-3 bg-gray-100">
+        <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 12, backgroundColor: "#f3f4f6" }}>
             <Toolbar
               activeTool={activeTool}
               activeColor={activeColor}
               strokeSize={strokeSize}
+              activeBackground={activeBackground}
               onToolChange={setActiveTool}
               onColorChange={setActiveColor}
               onStrokeSizeChange={setStrokeSize}
+              onBackgroundChange={setActiveBackground}
               onClear={handleClear}
               onUndo={handleUndo}
             />
           </div>
 
-          <div className="flex-1 p-3 overflow-hidden">
-            <div className="w-full h-full rounded-2xl overflow-hidden shadow-lg border border-gray-200"
-              style={{
-                backgroundImage: "linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)",
-                backgroundSize: "40px 40px",
-              }}
-            >
+          <div style={{ flex: 1, padding: 12, overflow: "hidden", display: "flex" }}>
+            <div style={{ width: "100%", height: "100%", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 8px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb", position: "relative", display: "flex" }}>
               <Canvas
                 ref={canvasRef}
                 activeTool={activeTool}
                 activeColor={activeColor}
                 strokeSize={strokeSize}
+                activeBackground={activeBackground}
                 partnerCursor={partnerCursor}
                 onStroke={handleStroke}
                 onCursorMove={handleCursorMove}
