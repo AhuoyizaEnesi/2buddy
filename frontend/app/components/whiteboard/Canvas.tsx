@@ -62,6 +62,7 @@ export interface CanvasRef {
   getDataUrl: () => string;
   loadFromDataUrl: (dataUrl: string) => void;
   applyRemoteStroke: (stroke: Stroke) => void;
+  drawImage: (dataUrl: string) => void;
 }
 
 const STICKY_COLORS = ["#fef08a", "#bbf7d0", "#bfdbfe", "#fecaca", "#e9d5ff"];
@@ -70,28 +71,27 @@ const getBackgroundStyle = (bg: Background): React.CSSProperties => {
   switch (bg) {
     case "dots":
       return {
-        backgroundColor: "#fafafa",
-        backgroundImage:
-          "radial-gradient(circle, #9ca3af 1px, transparent 1px)",
+        backgroundColor: "#f0f9ff",
+        backgroundImage: "radial-gradient(circle, #93c5fd 1px, transparent 1px)",
         backgroundSize: "24px 24px",
       };
     case "grid":
       return {
-        backgroundColor: "#fafafa",
+        backgroundColor: "#f0fdf4",
         backgroundImage:
-          "linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)",
+          "linear-gradient(#bbf7d0 1px, transparent 1px), linear-gradient(90deg, #bbf7d0 1px, transparent 1px)",
         backgroundSize: "40px 40px",
       };
     case "lined":
       return {
-        backgroundColor: "#fafafa",
-        backgroundImage: "linear-gradient(#dbeafe 1px, transparent 1px)",
+        backgroundColor: "#fefce8",
+        backgroundImage: "linear-gradient(#fde68a 1px, transparent 1px)",
         backgroundSize: "100% 32px",
       };
     case "isometric":
       return {
-        backgroundColor: "#fafafa",
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50V16L28 0l28 16v34L28 66zm0 0v34M0 50l28 16 28-16' fill='none' stroke='%23e5e7eb' stroke-width='1'/%3E%3C/svg%3E")`,
+        backgroundColor: "#faf5ff",
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50V16L28 0l28 16v34L28 66zm0 0v34M0 50l28 16 28-16' fill='none' stroke='%23e9d5ff' stroke-width='1'/%3E%3C/svg%3E")`,
         backgroundSize: "56px 100px",
       };
     case "chalkboard":
@@ -128,9 +128,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
     const activeToolRef = useRef<Tool>(activeTool);
     const activeColorRef = useRef<string>(activeColor);
     const strokeSizeRef = useRef<number>(strokeSize);
-    const laserTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(
-      new Map()
-    );
+    const laserTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
     const laserIdRef = useRef(0);
 
     const [textInput, setTextInput] = useState<{
@@ -144,17 +142,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
     const [editingSticky, setEditingSticky] = useState<string | null>(null);
     const [laserDots, setLaserDots] = useState<LaserDot[]>([]);
 
-    useEffect(() => {
-      activeToolRef.current = activeTool;
-    }, [activeTool]);
-
-    useEffect(() => {
-      activeColorRef.current = activeColor;
-    }, [activeColor]);
-
-    useEffect(() => {
-      strokeSizeRef.current = strokeSize;
-    }, [strokeSize]);
+    useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
+    useEffect(() => { activeColorRef.current = activeColor; }, [activeColor]);
+    useEffect(() => { strokeSizeRef.current = strokeSize; }, [strokeSize]);
 
     const getCtx = () => {
       const canvas = canvasRef.current;
@@ -178,108 +168,72 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
       const canvas = canvasRef.current;
       const ctx = getCtx();
       if (!canvas || !ctx || canvas.width === 0 || canvas.height === 0) return;
-      historyRef.current.push(
-        ctx.getImageData(0, 0, canvas.width, canvas.height)
-      );
+      historyRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
       if (historyRef.current.length > 50) historyRef.current.shift();
     };
 
-    const drawStroke = useCallback(
-      (ctx: CanvasRenderingContext2D, stroke: Stroke) => {
-        ctx.save();
+    const drawStroke = useCallback((ctx: CanvasRenderingContext2D, stroke: Stroke) => {
+      ctx.save();
 
-        if (stroke.tool === "eraser") {
-          ctx.globalCompositeOperation = "destination-out";
-          ctx.strokeStyle = "rgba(0,0,0,1)";
-          ctx.fillStyle = "rgba(0,0,0,1)";
+      if (stroke.tool === "eraser") {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+        ctx.fillStyle = "rgba(0,0,0,1)";
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = stroke.color;
+        ctx.fillStyle = stroke.color;
+      }
+
+      ctx.lineWidth = stroke.tool === "eraser" ? stroke.size * 3 : stroke.size;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      if (stroke.tool === "pen" || stroke.tool === "eraser") {
+        if (stroke.points.length < 2) {
+          ctx.beginPath();
+          ctx.arc(stroke.points[0].x, stroke.points[0].y, stroke.size / 2, 0, Math.PI * 2);
+          ctx.fill();
         } else {
-          ctx.globalCompositeOperation = "source-over";
-          ctx.strokeStyle = stroke.color;
-          ctx.fillStyle = stroke.color;
-        }
-
-        ctx.lineWidth =
-          stroke.tool === "eraser" ? stroke.size * 3 : stroke.size;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-
-        if (stroke.tool === "pen" || stroke.tool === "eraser") {
-          if (stroke.points.length < 2) {
-            ctx.beginPath();
-            ctx.arc(
-              stroke.points[0].x,
-              stroke.points[0].y,
-              stroke.size / 2,
-              0,
-              Math.PI * 2
-            );
-            ctx.fill();
-          } else {
-            ctx.beginPath();
-            ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-            for (let i = 1; i < stroke.points.length; i++) {
-              const midX =
-                (stroke.points[i - 1].x + stroke.points[i].x) / 2;
-              const midY =
-                (stroke.points[i - 1].y + stroke.points[i].y) / 2;
-              ctx.quadraticCurveTo(
-                stroke.points[i - 1].x,
-                stroke.points[i - 1].y,
-                midX,
-                midY
-              );
-            }
-            ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+          for (let i = 1; i < stroke.points.length; i++) {
+            const midX = (stroke.points[i - 1].x + stroke.points[i].x) / 2;
+            const midY = (stroke.points[i - 1].y + stroke.points[i].y) / 2;
+            ctx.quadraticCurveTo(stroke.points[i - 1].x, stroke.points[i - 1].y, midX, midY);
           }
-        } else if (stroke.tool === "line") {
-          const first = stroke.points[0];
-          const last = stroke.points[stroke.points.length - 1];
-          ctx.beginPath();
-          ctx.moveTo(first.x, first.y);
-          ctx.lineTo(last.x, last.y);
           ctx.stroke();
-        } else if (stroke.tool === "rectangle") {
-          const first = stroke.points[0];
-          const last = stroke.points[stroke.points.length - 1];
-          ctx.strokeRect(
-            first.x,
-            first.y,
-            last.x - first.x,
-            last.y - first.y
-          );
-        } else if (stroke.tool === "circle") {
-          const first = stroke.points[0];
-          const last = stroke.points[stroke.points.length - 1];
-          const radiusX = Math.abs(last.x - first.x) / 2;
-          const radiusY = Math.abs(last.y - first.y) / 2;
-          const centerX = first.x + (last.x - first.x) / 2;
-          const centerY = first.y + (last.y - first.y) / 2;
-          ctx.beginPath();
-          ctx.ellipse(
-            centerX,
-            centerY,
-            radiusX,
-            radiusY,
-            0,
-            0,
-            2 * Math.PI
-          );
-          ctx.stroke();
-        } else if (stroke.tool === "text" && stroke.text) {
-          ctx.globalCompositeOperation = "source-over";
-          ctx.fillStyle = stroke.color;
-          ctx.font = `${stroke.size * 4 + 12}px sans-serif`;
-          ctx.fillText(
-            stroke.text,
-            stroke.points[0].x,
-            stroke.points[0].y
-          );
         }
+      } else if (stroke.tool === "line") {
+        const first = stroke.points[0];
+        const last = stroke.points[stroke.points.length - 1];
+        ctx.beginPath();
+        ctx.moveTo(first.x, first.y);
+        ctx.lineTo(last.x, last.y);
+        ctx.stroke();
+      } else if (stroke.tool === "rectangle") {
+        const first = stroke.points[0];
+        const last = stroke.points[stroke.points.length - 1];
+        ctx.strokeRect(first.x, first.y, last.x - first.x, last.y - first.y);
+      } else if (stroke.tool === "circle") {
+        const first = stroke.points[0];
+        const last = stroke.points[stroke.points.length - 1];
+        const radiusX = Math.abs(last.x - first.x) / 2;
+        const radiusY = Math.abs(last.y - first.y) / 2;
+        const centerX = first.x + (last.x - first.x) / 2;
+        const centerY = first.y + (last.y - first.y) / 2;
+        ctx.beginPath();
+        ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+      } else if (stroke.tool === "text" && stroke.text) {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = stroke.color;
+        ctx.font = `${stroke.size * 4 + 12}px sans-serif`;
+        ctx.fillText(stroke.text, stroke.points[0].x, stroke.points[0].y);
+      }
 
-        ctx.restore();
-      },
-      []
-    );
+      ctx.restore();
+    }, []);
 
     useImperativeHandle(ref, () => ({
       clearCanvas: () => {
@@ -319,6 +273,25 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         const canvas = canvasRef.current;
         if (canvas) onCanvasUpdate(canvas.toDataURL("image/png"));
       },
+      drawImage: (dataUrl: string) => {
+        const canvas = canvasRef.current;
+        const ctx = getCtx();
+        if (!canvas || !ctx) return;
+        const img = new Image();
+        img.onload = () => {
+          saveHistory();
+          const scale = Math.min(
+            canvas.width / img.width,
+            canvas.height / img.height,
+            1
+          );
+          const x = (canvas.width - img.width * scale) / 2;
+          const y = (canvas.height - img.height * scale) / 2;
+          ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+          onCanvasUpdate(canvas.toDataURL("image/png"));
+        };
+        img.src = dataUrl;
+      },
     }));
 
     useEffect(() => {
@@ -345,8 +318,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
             x: e.clientX - rect.left,
             y: e.clientY - rect.top,
             text: "",
-            color:
-              STICKY_COLORS[Math.floor(Math.random() * STICKY_COLORS.length)],
+            color: STICKY_COLORS[Math.floor(Math.random() * STICKY_COLORS.length)],
           };
           setStickyNotes((prev) => [...prev, newSticky]);
           setEditingSticky(newSticky.id);
@@ -389,12 +361,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
           if (canvas.width > 0 && canvas.height > 0) {
             const ctx = canvas.getContext("2d");
             if (ctx)
-              snapshotRef.current = ctx.getImageData(
-                0,
-                0,
-                canvas.width,
-                canvas.height
-              );
+              snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
           }
         }
       };
@@ -444,12 +411,11 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
             ctx.globalCompositeOperation = "source-over";
             ctx.strokeStyle = stroke.color;
           }
-          ctx.lineWidth =
-            stroke.tool === "eraser" ? stroke.size * 3 : stroke.size;
+          ctx.lineWidth = stroke.tool === "eraser" ? stroke.size * 3 : stroke.size;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
-
           ctx.beginPath();
+
           const p1 = points[len - 2];
           const p2 = points[len - 1];
           const midX = (p1.x + p2.x) / 2;
@@ -530,12 +496,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         tool: "text",
         color: activeColorRef.current,
         size: strokeSizeRef.current,
-        points: [
-          {
-            x: textInput.x * scaleX,
-            y: textInput.y * scaleY,
-          },
-        ],
+        points: [{ x: textInput.x * scaleX, y: textInput.y * scaleY }],
         text: textInput.value,
       };
       drawStroke(ctx, stroke);
@@ -598,7 +559,6 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
               boxShadow: "0 0 8px 4px rgba(239, 68, 68, 0.4)",
               pointerEvents: "none",
               zIndex: 30,
-              transition: "opacity 0.3s",
             }}
           />
         ))}
@@ -627,9 +587,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
                 onChange={(e) => {
                   const val = e.target.value;
                   setStickyNotes((prev) =>
-                    prev.map((n) =>
-                      n.id === note.id ? { ...n, text: val } : n
-                    )
+                    prev.map((n) => (n.id === note.id ? { ...n, text: val } : n))
                   );
                 }}
                 onBlur={() => setEditingSticky(null)}
@@ -666,9 +624,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
             )}
             <button
               onClick={() =>
-                setStickyNotes((prev) =>
-                  prev.filter((n) => n.id !== note.id)
-                )
+                setStickyNotes((prev) => prev.filter((n) => n.id !== note.id))
               }
               style={{
                 position: "absolute",
@@ -688,13 +644,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         ))}
 
         {partnerCursor && (
-          <div
-            style={{
-              position: "absolute",
-              zIndex: 20,
-              pointerEvents: "none",
-            }}
-          >
+          <div style={{ position: "absolute", zIndex: 20, pointerEvents: "none" }}>
             <PartnerCursor
               x={partnerCursor.x}
               y={partnerCursor.y}
@@ -728,9 +678,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
               onBlur={handleTextSubmit}
               style={{
                 border: "none",
-                borderBottom: `2px solid ${
-                  isChalkboard ? "#ffffff" : "#7F77DD"
-                }`,
+                borderBottom: `2px solid ${isChalkboard ? "#ffffff" : "#2563eb"}`,
                 outline: "none",
                 background: "transparent",
                 fontSize: 14,

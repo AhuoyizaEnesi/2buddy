@@ -6,10 +6,10 @@ import { sessionsAPI } from "@/app/lib/api";
 import { getUser, isAuthenticated } from "@/app/lib/auth";
 import { connectSocket, disconnectSocket } from "@/app/lib/socket";
 import Canvas, { CanvasRef } from "@/app/components/whiteboard/Canvas";
-import Toolbar, { Tool, Background } from "@/app/components/whiteboard/Toolbar";
-import AIPanel from "@/app/components/whiteboard/AIPanel";
-import ProblemPanel from "@/app/components/whiteboard/ProblemPanel";
-import Button from "@/app/components/ui/Button";
+import { Tool, Background } from "@/app/components/whiteboard/Toolbar";
+import LeftPanel from "@/app/components/whiteboard/LeftPanel";
+import RightPanel from "@/app/components/whiteboard/RightPanel";
+import FloatingToolbar from "@/app/components/whiteboard/FloatingToolbar";
 
 interface AIMessage {
   type: "auto_check" | "review" | "stuck" | "error" | "thinking";
@@ -65,11 +65,24 @@ export default function BoardPage() {
   const [sessionTimer, setSessionTimer] = useState(1200);
   const [notification, setNotification] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
+  const [reactions, setReactions] = useState<{ id: number; emoji: string; x: number; y: number }[]>([]);
+  const reactionIdRef = useRef(0);
 
   const showNotification = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 4000);
   };
+
+  const handleReaction = useCallback((emoji: string) => {
+    if (!session) return;
+    const socket = connectSocket();
+    const x = 20 + Math.random() * 60;
+    const y = 20 + Math.random() * 60;
+    socket.emit("reaction", { room_code: session.room_code, emoji, x, y });
+    const id = reactionIdRef.current++;
+    setReactions((prev) => [...prev, { id, emoji, x, y }]);
+    setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 3000);
+  }, [session]);
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/login"); return; }
@@ -119,6 +132,12 @@ export default function BoardPage() {
       showNotification("Canvas cleared");
     });
 
+    socket.on("reaction", (data: any) => {
+      const id = reactionIdRef.current++;
+      setReactions((prev) => [...prev, { id, emoji: data.emoji, x: data.x, y: data.y }]);
+      setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 3000);
+    });
+
     socket.on("ai_thinking", ({ type }: { type: string }) => {
       setAiMessages((prev) => [
         ...prev,
@@ -152,6 +171,7 @@ export default function BoardPage() {
       socket.off("receive_stroke");
       socket.off("partner_cursor");
       socket.off("canvas_cleared");
+      socket.off("reaction");
       socket.off("ai_thinking");
       socket.off("ai_feedback");
       socket.off("stuck_vote_update");
@@ -197,6 +217,26 @@ export default function BoardPage() {
 
   const handleUndo = useCallback(() => { canvasRef.current?.undo(); }, []);
 
+  const handleExport = useCallback(() => {
+    const dataUrl = canvasRef.current?.getDataUrl() || "";
+    if (!dataUrl) return;
+    const link = document.createElement("a");
+    link.download = `2buddy-session-${session?.room_code || "board"}.png`;
+    link.href = dataUrl;
+    link.click();
+  }, [session]);
+
+  const handleImageUpload = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      canvas.drawImage(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
   const handleRequestReview = useCallback(() => {
     if (!session) return;
     const socket = connectSocket();
@@ -226,98 +266,140 @@ export default function BoardPage() {
 
   if (!session) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#f9fafb" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#f0f4ff" }}>
         <p style={{ fontSize: 14, color: "#6b7280" }}>Loading session...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", backgroundColor: "#f3f4f6", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", backgroundColor: "#ffffff", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", backgroundColor: "#f0f4ff", overflow: "hidden" }}>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 20px", height: 56, backgroundColor: "#1e3a5f",
+        flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+      }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>2buddy</span>
-          <span style={{ fontSize: 11, color: "#9ca3af", fontFamily: "monospace", backgroundColor: "#f3f4f6", padding: "2px 8px", borderRadius: 6 }}>
-            {session.room_code}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 32, height: 32, backgroundColor: "#2563eb", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 16 }}>
+              2
+            </div>
+            <span style={{ color: "#ffffff", fontWeight: 700, fontSize: 18 }}>2Buddy</span>
+          </div>
+          <div style={{ width: 1, height: 24, backgroundColor: "rgba(255,255,255,0.2)" }} />
+          <span style={{ color: "#ffffff", fontWeight: 600, fontSize: 14, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            {session.subject}
           </span>
-          <span style={{ fontSize: 12, color: "#6b7280", textTransform: "capitalize" }}>{session.subject}</span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, backgroundColor: "#22c55e", padding: "6px 16px", borderRadius: 20 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+          </svg>
+          <span style={{ color: "#ffffff", fontWeight: 600, fontSize: 13 }}>
+            {user?.username} {partnerConnected ? `& ${partnerName}` : "& waiting..."}
+          </span>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {notification && (
-            <span style={{ fontSize: 12, backgroundColor: "#f5f3ff", color: "#6d28d9", padding: "4px 12px", borderRadius: 20, border: "1px solid #ddd6fe" }}>
+            <span style={{ fontSize: 12, backgroundColor: "rgba(255,255,255,0.15)", color: "#ffffff", padding: "4px 12px", borderRadius: 20 }}>
               {notification}
             </span>
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: userColor }} />
-            <span style={{ fontSize: 12, color: "#6b7280" }}>{user?.username} (you)</span>
+          <button
+            onClick={handleEndSession}
+            style={{ padding: "6px 16px", backgroundColor: "#ef4444", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            {ending ? "Ending..." : "End Session"}
+          </button>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: userColor, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14 }}>
+            {user?.username?.[0]?.toUpperCase()}
           </div>
-          {partnerConnected && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: partnerColor }} />
-              <span style={{ fontSize: 12, color: "#6b7280" }}>{partnerName}</span>
-            </div>
-          )}
-          <Button variant="danger" size="sm" loading={ending} onClick={handleEndSession}>
-            End session
-          </Button>
         </div>
       </div>
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <ProblemPanel
+      <div style={{ display: "flex", flex: 1, overflow: "hidden", gap: 0 }}>
+        <LeftPanel
           problem={session.problem}
           sessionTimer={sessionTimer}
-          partnerConnected={partnerConnected}
-          partnerName={partnerName}
-          partnerColor={partnerColor}
-          userName={user?.username || ""}
-          userColor={userColor}
+          aiMessages={aiMessages}
+          onRequestReview={handleRequestReview}
+          onVoteStuck={handleVoteStuck}
+          hasVotedStuck={hasVotedStuck}
+          stuckVotes={stuckVotes}
+          checksRemaining={checksRemaining}
+          canvasRef={canvasRef}
         />
 
-        <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 12, backgroundColor: "#f3f4f6" }}>
-            <Toolbar
+        <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <FloatingToolbar
+            activeTool={activeTool}
+            activeBackground={activeBackground}
+            onToolChange={setActiveTool}
+            onBackgroundChange={setActiveBackground}
+            onClear={handleClear}
+            onUndo={handleUndo}
+            onExport={handleExport}
+          />
+
+          <div style={{ flex: 1, margin: 12, borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.1)", position: "relative", display: "flex" }}>
+            <Canvas
+              ref={canvasRef}
               activeTool={activeTool}
               activeColor={activeColor}
               strokeSize={strokeSize}
               activeBackground={activeBackground}
-              onToolChange={setActiveTool}
-              onColorChange={setActiveColor}
-              onStrokeSizeChange={setStrokeSize}
-              onBackgroundChange={setActiveBackground}
-              onClear={handleClear}
-              onUndo={handleUndo}
+              partnerCursor={partnerCursor}
+              onStroke={handleStroke}
+              onCursorMove={handleCursorMove}
+              onCanvasUpdate={handleCanvasUpdate}
             />
-          </div>
 
-          <div style={{ flex: 1, padding: 12, overflow: "hidden", display: "flex" }}>
-            <div style={{ width: "100%", height: "100%", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 8px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb", position: "relative", display: "flex" }}>
-              <Canvas
-                ref={canvasRef}
-                activeTool={activeTool}
-                activeColor={activeColor}
-                strokeSize={strokeSize}
-                activeBackground={activeBackground}
-                partnerCursor={partnerCursor}
-                onStroke={handleStroke}
-                onCursorMove={handleCursorMove}
-                onCanvasUpdate={handleCanvasUpdate}
-              />
-            </div>
+            {reactions.map((r) => (
+              <div
+                key={r.id}
+                style={{
+                  position: "absolute",
+                  left: `${r.x}%`,
+                  top: `${r.y}%`,
+                  fontSize: 32,
+                  pointerEvents: "none",
+                  zIndex: 100,
+                  animation: "floatUp 3s ease-out forwards",
+                }}
+              >
+                {r.emoji}
+              </div>
+            ))}
           </div>
         </div>
 
-        <AIPanel
-          messages={aiMessages}
-          stuckVotes={stuckVotes}
-          onRequestReview={handleRequestReview}
-          onVoteStuck={handleVoteStuck}
-          hasVotedStuck={hasVotedStuck}
-          checksRemaining={checksRemaining}
+        <RightPanel
+          userColor={userColor}
+          userName={user?.username || ""}
+          partnerColor={partnerColor}
+          partnerName={partnerName}
+          partnerConnected={partnerConnected}
+          activeTool={activeTool}
+          activeColor={activeColor}
+          strokeSize={strokeSize}
+          activeBackground={activeBackground}
+          onToolChange={setActiveTool}
+          onColorChange={setActiveColor}
+          onStrokeSizeChange={setStrokeSize}
+          onBackgroundChange={setActiveBackground}
+          onReaction={handleReaction}
+          onImageUpload={handleImageUpload}
         />
       </div>
+
+      <style>{`
+        @keyframes floatUp {
+          0% { transform: translateY(0) scale(1); opacity: 1; }
+          100% { transform: translateY(-120px) scale(1.4); opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }
