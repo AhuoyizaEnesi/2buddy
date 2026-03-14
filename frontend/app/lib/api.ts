@@ -4,16 +4,12 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const api = axios.create({
   baseURL: API_BASE,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
 });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
@@ -32,30 +28,29 @@ api.interceptors.response.use(
 export const authAPI = {
   register: (data: { username: string; email: string; password: string }) =>
     api.post("/auth/register", data),
-
   login: (data: { username: string; password: string }) =>
     api.post("/auth/login", data),
-
   getMe: () => api.get("/auth/me"),
 };
 
 export const sessionsAPI = {
   joinOrCreate: (subject: string) =>
     api.post("/sessions/join", { subject }),
-
+  createDirect: (subject: string) =>
+    api.post("/sessions/create-direct", { subject }),
+  joinDirect: (sessionId: string) =>
+    api.post(`/sessions/join-direct/${sessionId}`),
   getSession: (sessionId: string) =>
     api.get(`/sessions/${sessionId}`),
-
   endSession: (sessionId: string) =>
     api.post(`/sessions/${sessionId}/end`),
-
-  getHistory: () => api.get("/sessions/history"),
+  getHistory: () =>
+    api.get("/sessions/history"),
 };
 
 export const problemsAPI = {
   getBySubject: (subject: string) =>
     api.get(`/problems/${subject}`),
-
   getById: (problemId: string) =>
     api.get(`/problems/single/${problemId}`),
 };
