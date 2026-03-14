@@ -6,6 +6,7 @@ from app import models, schemas, auth
 from typing import List
 import random
 import string
+import time
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -20,57 +21,91 @@ def join_or_create_session(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    existing_participation = db.query(models.SessionParticipant).join(
-        models.Session
-    ).filter(
-        models.SessionParticipant.user_id == current_user.id,
-        models.Session.status.in_(["waiting", "active"])
-    ).first()
-
-    if existing_participation:
-        return existing_participation.session
-
-    waiting_session = db.query(models.Session).filter(
-        models.Session.subject == data.subject.lower(),
-        models.Session.status == "waiting"
-    ).first()
-
+    subject = data.subject.lower().strip()
     colors = ["#7F77DD", "#1D9E75", "#D85A30", "#378ADD", "#D4537E"]
 
-    if waiting_session:
-        existing_participants = db.query(models.SessionParticipant).filter(
-            models.SessionParticipant.session_id == waiting_session.id
-        ).all()
-        used_colors = [p.color for p in existing_participants]
-        available_colors = [c for c in colors if c not in used_colors]
-        color = available_colors[0] if available_colors else colors[1]
-
-        participant = models.SessionParticipant(
-            session_id=waiting_session.id,
-            user_id=current_user.id,
-            color=color
+    existing_participation = (
+        db.query(models.SessionParticipant)
+        .join(models.Session)
+        .filter(
+            models.SessionParticipant.user_id == current_user.id,
+            models.Session.status.in_(["waiting", "active"])
         )
-        db.add(participant)
+        .first()
+    )
 
-        problem = db.query(models.Problem).filter(
-            models.Problem.subject == data.subject.lower()
-        ).order_by(func.random()).first()
+    if existing_participation:
+        session = db.query(models.Session).filter(
+            models.Session.id == existing_participation.session_id
+        ).first()
+        return session
 
-        waiting_session.status = "active"
-        if problem:
-            waiting_session.problem_id = problem.id
+    for attempt in range(3):
+        waiting_session = (
+            db.query(models.Session)
+            .filter(
+                models.Session.subject == subject,
+                models.Session.status == "waiting"
+            )
+            .filter(
+                ~models.Session.participants.any(
+                    models.SessionParticipant.user_id == current_user.id
+                )
+            )
+            .with_for_update()
+            .first()
+        )
 
-        db.commit()
-        db.refresh(waiting_session)
-        return waiting_session
+        if waiting_session:
+            existing_participants = (
+                db.query(models.SessionParticipant)
+                .filter(models.SessionParticipant.session_id == waiting_session.id)
+                .all()
+            )
+            used_colors = [p.color for p in existing_participants]
+            available_colors = [c for c in colors if c not in used_colors]
+            color = available_colors[0] if available_colors else colors[1]
+
+            participant = models.SessionParticipant(
+                session_id=waiting_session.id,
+                user_id=current_user.id,
+                color=color
+            )
+            db.add(participant)
+
+            problem = (
+                db.query(models.Problem)
+                .filter(models.Problem.subject == subject)
+                .order_by(func.random())
+                .first()
+            )
+
+            waiting_session.status = "active"
+            if problem:
+                waiting_session.problem_id = problem.id
+
+            try:
+                db.commit()
+                db.refresh(waiting_session)
+                return waiting_session
+            except Exception:
+                db.rollback()
+                if attempt < 2:
+                    time.sleep(0.1)
+                    continue
+                raise HTTPException(status_code=500, detail="Failed to join session, try again")
+
+        break
 
     room_code = generate_room_code()
-    while db.query(models.Session).filter(models.Session.room_code == room_code).first():
+    while db.query(models.Session).filter(
+        models.Session.room_code == room_code
+    ).first():
         room_code = generate_room_code()
 
     new_session = models.Session(
         room_code=room_code,
-        subject=data.subject.lower(),
+        subject=subject,
         status="waiting"
     )
     db.add(new_session)
@@ -98,11 +133,15 @@ def get_session_history(
     ).all()
 
     session_ids = [p.session_id for p in participations]
-    sessions = db.query(models.Session).filter(
-        models.Session.id.in_(session_ids),
-        models.Session.status == "completed"
-    ).order_by(models.Session.ended_at.desc()).all()
-
+    sessions = (
+        db.query(models.Session)
+        .filter(
+            models.Session.id.in_(session_ids),
+            models.Session.status == "completed"
+        )
+        .order_by(models.Session.ended_at.desc())
+        .all()
+    )
     return sessions
 
 
@@ -112,7 +151,9 @@ def get_session(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    session = db.query(models.Session).filter(models.Session.id == session_id).first()
+    session = db.query(models.Session).filter(
+        models.Session.id == session_id
+    ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
@@ -124,11 +165,12 @@ def end_session(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    session = db.query(models.Session).filter(models.Session.id == session_id).first()
+    session = db.query(models.Session).filter(
+        models.Session.id == session_id
+    ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    from sqlalchemy.sql import func
     session.status = "completed"
     session.ended_at = func.now()
     db.commit()
