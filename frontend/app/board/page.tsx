@@ -181,7 +181,10 @@ export default function BoardPage() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setSessionTimer((t) => { if (t <= 1) { clearInterval(timer); return 0; } return t - 1; });
+      setSessionTimer((t) => {
+        if (t <= 1) { clearInterval(timer); return 0; }
+        return t - 1;
+      });
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -198,7 +201,10 @@ export default function BoardPage() {
   const handleCursorMove = useCallback((x: number, y: number) => {
     if (!session || !user) return;
     const socket = connectSocket();
-    socket.emit("cursor_move", { room_code: session.room_code, x, y, color: userColor, username: user.username });
+    socket.emit("cursor_move", {
+      room_code: session.room_code, x, y,
+      color: userColor, username: user.username,
+    });
   }, [session, user, userColor]);
 
   const handleCanvasUpdate = useCallback((dataUrl: string) => {
@@ -230,9 +236,7 @@ export default function BoardPage() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      canvas.drawImage(dataUrl);
+      if (canvasRef.current) canvasRef.current.drawImage(dataUrl);
     };
     reader.readAsDataURL(file);
   }, []);
@@ -242,7 +246,11 @@ export default function BoardPage() {
     const socket = connectSocket();
     const dataUrl = canvasRef.current?.getDataUrl() || "";
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-    socket.emit("request_review", { room_code: session.room_code, canvas_data: base64, problem_description: session.problem?.description || "" });
+    socket.emit("request_review", {
+      room_code: session.room_code,
+      canvas_data: base64,
+      problem_description: session.problem?.description || "",
+    });
   }, [session]);
 
   const handleVoteStuck = useCallback(() => {
@@ -251,7 +259,12 @@ export default function BoardPage() {
     const socket = connectSocket();
     const dataUrl = canvasRef.current?.getDataUrl() || "";
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-    socket.emit("vote_stuck", { room_code: session.room_code, username: user?.username, canvas_data: base64, problem_description: session.problem?.description || "" });
+    socket.emit("vote_stuck", {
+      room_code: session.room_code,
+      username: user?.username,
+      canvas_data: base64,
+      problem_description: session.problem?.description || "",
+    });
   }, [session, hasVotedStuck, user]);
 
   const handleEndSession = async () => {
@@ -266,33 +279,49 @@ export default function BoardPage() {
 
   if (!session) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#f0f4ff" }}>
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center",
+        justifyContent: "center", backgroundColor: "#f0f4ff",
+      }}>
         <p style={{ fontSize: 14, color: "#6b7280" }}>Loading session...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", backgroundColor: "#f0f4ff", overflow: "hidden" }}>
+    <div style={{
+      display: "flex", flexDirection: "column",
+      height: "100vh", backgroundColor: "#f0f4ff", overflow: "hidden",
+    }}>
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 20px", height: 56, backgroundColor: "#1e3a5f",
-        flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+        flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 32, height: 32, backgroundColor: "#2563eb", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 16 }}>
+            <div style={{
+              width: 32, height: 32, backgroundColor: "#2563eb",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 700, color: "#fff", fontSize: 16,
+            }}>
               2
             </div>
             <span style={{ color: "#ffffff", fontWeight: 700, fontSize: 18 }}>2Buddy</span>
           </div>
           <div style={{ width: 1, height: 24, backgroundColor: "rgba(255,255,255,0.2)" }} />
-          <span style={{ color: "#ffffff", fontWeight: 600, fontSize: 14, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <span style={{
+            color: "#ffffff", fontWeight: 600, fontSize: 14,
+            textTransform: "uppercase", letterSpacing: "0.08em",
+          }}>
             {session.subject}
           </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, backgroundColor: "#22c55e", padding: "6px 16px", borderRadius: 20 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          backgroundColor: "#22c55e", padding: "6px 16px",
+        }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
             <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
           </svg>
@@ -303,23 +332,34 @@ export default function BoardPage() {
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {notification && (
-            <span style={{ fontSize: 12, backgroundColor: "rgba(255,255,255,0.15)", color: "#ffffff", padding: "4px 12px", borderRadius: 20 }}>
+            <span style={{
+              fontSize: 12, backgroundColor: "rgba(255,255,255,0.15)",
+              color: "#ffffff", padding: "4px 12px",
+            }}>
               {notification}
             </span>
           )}
           <button
             onClick={handleEndSession}
-            style={{ padding: "6px 16px", backgroundColor: "#ef4444", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{
+              padding: "6px 16px", backgroundColor: "#ef4444",
+              color: "#fff", border: "none", borderRadius: 0,
+              fontSize: 13, fontWeight: 600, cursor: "pointer",
+            }}
           >
             {ending ? "Ending..." : "End Session"}
           </button>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: userColor, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14 }}>
+          <div style={{
+            width: 32, height: 32, backgroundColor: userColor,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", fontWeight: 700, fontSize: 14,
+          }}>
             {user?.username?.[0]?.toUpperCase()}
           </div>
         </div>
       </div>
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden", gap: 0 }}>
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <LeftPanel
           problem={session.problem}
           sessionTimer={sessionTimer}
@@ -332,7 +372,10 @@ export default function BoardPage() {
           canvasRef={canvasRef}
         />
 
-        <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{
+          flex: 1, position: "relative",
+          overflow: "hidden", display: "flex", flexDirection: "column",
+        }}>
           <FloatingToolbar
             activeTool={activeTool}
             activeBackground={activeBackground}
@@ -343,7 +386,15 @@ export default function BoardPage() {
             onExport={handleExport}
           />
 
-          <div style={{ flex: 1, margin: 12, borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.1)", position: "relative", display: "flex" }}>
+          <div style={{
+            flex: 1,
+            margin: "64px 12px 12px 12px",
+            overflow: "hidden",
+            boxShadow: "0 2px 16px rgba(0,0,0,0.1)",
+            position: "relative",
+            display: "flex",
+            border: "1px solid #e5e7eb",
+          }}>
             <Canvas
               ref={canvasRef}
               activeTool={activeTool}
