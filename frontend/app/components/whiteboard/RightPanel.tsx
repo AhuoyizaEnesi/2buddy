@@ -36,7 +36,7 @@ const tools: { id: Tool; label: string; icon: React.ReactNode }[] = [
   },
   {
     id: "rectangle", label: "Rectangle",
-    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="1" /></svg>
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" /></svg>
   },
   {
     id: "circle", label: "Circle",
@@ -47,7 +47,7 @@ const tools: { id: Tool; label: string; icon: React.ReactNode }[] = [
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 4v3h5.5v12h3V7H19V4z" /></svg>
   },
   {
-    id: "sticky", label: "Sticky Note",
+    id: "sticky", label: "Sticky",
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14l4-4h12c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" /></svg>
   },
   {
@@ -56,27 +56,80 @@ const tools: { id: Tool; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-const colors = ["#1a1a1a", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899"];
+const colors = [
+  "#1a1a1a", "#ef4444", "#f97316", "#eab308",
+  "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899",
+];
+
 const strokeSizes = [2, 4, 6, 10, 16];
 const reactions = ["😀", "😂", "🤔", "😮", "👍", "👎"];
 
-const backgrounds: { id: Background; label: string }[] = [
-  { id: "white", label: "W" },
-  { id: "dots", label: "D" },
-  { id: "grid", label: "G" },
-  { id: "lined", label: "L" },
-  { id: "isometric", label: "I" },
-  { id: "chalkboard", label: "C" },
+const backgrounds: {
+  id: Background;
+  label: string;
+  preview: React.ReactNode;
+}[] = [
+  {
+    id: "white",
+    label: "Plain",
+    preview: (
+      <div style={{ width: "100%", height: "100%", backgroundColor: "#ffffff", border: "1px solid #e5e7eb" }} />
+    ),
+  },
+  {
+    id: "dots",
+    label: "Dots",
+    preview: (
+      <div style={{
+        width: "100%", height: "100%", backgroundColor: "#f0f9ff",
+        backgroundImage: "radial-gradient(circle, #93c5fd 1px, transparent 1px)",
+        backgroundSize: "8px 8px",
+      }} />
+    ),
+  },
+  {
+    id: "grid",
+    label: "Grid",
+    preview: (
+      <div style={{
+        width: "100%", height: "100%", backgroundColor: "#f0fdf4",
+        backgroundImage: "linear-gradient(#bbf7d0 1px, transparent 1px), linear-gradient(90deg, #bbf7d0 1px, transparent 1px)",
+        backgroundSize: "10px 10px",
+      }} />
+    ),
+  },
+  {
+    id: "lined",
+    label: "Lined",
+    preview: (
+      <div style={{
+        width: "100%", height: "100%", backgroundColor: "#fefce8",
+        backgroundImage: "linear-gradient(#fde68a 1px, transparent 1px)",
+        backgroundSize: "100% 8px",
+      }} />
+    ),
+  },
+  {
+    id: "isometric",
+    label: "Iso",
+    preview: (
+      <svg width="100%" height="100%" style={{ backgroundColor: "#faf5ff" }}>
+        <line x1="0" y1="14" x2="28" y2="0" stroke="#e9d5ff" strokeWidth="0.8" />
+        <line x1="0" y1="28" x2="42" y2="0" stroke="#e9d5ff" strokeWidth="0.8" />
+        <line x1="14" y1="42" x2="42" y2="0" stroke="#e9d5ff" strokeWidth="0.8" />
+        <line x1="0" y1="14" x2="42" y2="28" stroke="#e9d5ff" strokeWidth="0.8" />
+        <line x1="0" y1="28" x2="28" y2="42" stroke="#e9d5ff" strokeWidth="0.8" />
+      </svg>
+    ),
+  },
+  {
+    id: "chalkboard",
+    label: "Chalk",
+    preview: (
+      <div style={{ width: "100%", height: "100%", backgroundColor: "#1a3a2a" }} />
+    ),
+  },
 ];
-
-const bgColors: Record<Background, string> = {
-  white: "#ffffff",
-  dots: "#f0f9ff",
-  grid: "#f0fdf4",
-  lined: "#fefce8",
-  isometric: "#faf5ff",
-  chalkboard: "#1a3a2a",
-};
 
 export default function RightPanel({
   userColor,
@@ -98,7 +151,10 @@ export default function RightPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sectionTitle = (title: string) => (
-    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+    <div style={{
+      fontSize: 11, fontWeight: 700, color: "#6b7280",
+      textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8,
+    }}>
       {title}
     </div>
   );
@@ -116,21 +172,30 @@ export default function RightPanel({
       {sectionTitle("Collaboration & Tools")}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", backgroundColor: "#f0f9ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
-          <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: userColor }} />
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 10px", backgroundColor: "#f0f9ff",
+          border: "1px solid #bfdbfe",
+        }}>
+          <div style={{ width: 10, height: 10, backgroundColor: userColor }} />
           <span style={{ fontSize: 12, fontWeight: 600, color: "#1e40af", flex: 1 }}>
             USER 1: {userName}
           </span>
-          <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 600 }}>You</span>
+          <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700 }}>You</span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", backgroundColor: partnerConnected ? "#f0fdf4" : "#f9fafb", borderRadius: 8, border: `1px solid ${partnerConnected ? "#bbf7d0" : "#e5e7eb"}` }}>
-          <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: partnerConnected ? partnerColor : "#d1d5db" }} />
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 10px",
+          backgroundColor: partnerConnected ? "#f0fdf4" : "#f9fafb",
+          border: `1px solid ${partnerConnected ? "#bbf7d0" : "#e5e7eb"}`,
+        }}>
+          <div style={{ width: 10, height: 10, backgroundColor: partnerConnected ? partnerColor : "#d1d5db" }} />
           <span style={{ fontSize: 12, fontWeight: 600, color: partnerConnected ? "#166534" : "#9ca3af", flex: 1 }}>
             USER 2: {partnerConnected ? partnerName : "Waiting..."}
           </span>
           {partnerConnected && (
-            <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 600 }}>Active</span>
+            <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700 }}>Active</span>
           )}
         </div>
       </div>
@@ -139,22 +204,24 @@ export default function RightPanel({
 
       {sectionTitle("Whiteboard Tools")}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4, marginBottom: 12 }}>
         {tools.map((tool) => (
           <button
             key={tool.id}
             onClick={() => onToolChange(tool.id)}
             title={tool.label}
             style={{
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              padding: "8px 4px", borderRadius: 8, border: "none", cursor: "pointer",
-              backgroundColor: activeTool === tool.id ? "#2563eb" : "#f3f4f6",
+              display: "flex", flexDirection: "column", alignItems: "center",
+              justifyContent: "center", padding: "8px 4px",
+              border: activeTool === tool.id ? "2px solid #2563eb" : "1px solid #e5e7eb",
+              cursor: "pointer",
+              backgroundColor: activeTool === tool.id ? "#2563eb" : "#f9fafb",
               color: activeTool === tool.id ? "#ffffff" : "#374151",
-              gap: 3,
+              gap: 3, borderRadius: 0,
             }}
           >
             {tool.icon}
-            <span style={{ fontSize: 9, fontWeight: 500 }}>{tool.label}</span>
+            <span style={{ fontSize: 9, fontWeight: 600 }}>{tool.label}</span>
           </button>
         ))}
 
@@ -162,15 +229,17 @@ export default function RightPanel({
           onClick={() => fileInputRef.current?.click()}
           title="Image Upload"
           style={{
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            padding: "8px 4px", borderRadius: 8, border: "none", cursor: "pointer",
-            backgroundColor: "#f3f4f6", color: "#374151", gap: 3,
+            display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "center", padding: "8px 4px",
+            border: "1px solid #e5e7eb", cursor: "pointer",
+            backgroundColor: "#f9fafb", color: "#374151",
+            gap: 3, borderRadius: 0,
           }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
           </svg>
-          <span style={{ fontSize: 9, fontWeight: 500 }}>Image</span>
+          <span style={{ fontSize: 9, fontWeight: 600 }}>Image</span>
         </button>
 
         <input
@@ -186,16 +255,19 @@ export default function RightPanel({
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6 }}>Color</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Color</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
           {colors.map((color) => (
             <button
               key={color}
               onClick={() => onColorChange(color)}
               style={{
-                width: 22, height: 22, borderRadius: "50%", border: activeColor === color ? "2px solid #2563eb" : "2px solid #e5e7eb",
+                width: 24, height: 24,
+                border: activeColor === color ? "3px solid #2563eb" : "2px solid #e5e7eb",
                 backgroundColor: color, cursor: "pointer", padding: 0,
-                transform: activeColor === color ? "scale(1.2)" : "scale(1)", transition: "all 0.15s",
+                borderRadius: 0,
+                transform: activeColor === color ? "scale(1.15)" : "scale(1)",
+                transition: "all 0.1s",
               }}
             />
           ))}
@@ -203,25 +275,30 @@ export default function RightPanel({
             type="color"
             value={activeColor}
             onChange={(e) => onColorChange(e.target.value)}
-            style={{ width: 22, height: 22, borderRadius: "50%", border: "2px solid #e5e7eb", cursor: "pointer", padding: 0 }}
+            style={{ width: 24, height: 24, border: "2px solid #e5e7eb", cursor: "pointer", padding: 0, borderRadius: 0 }}
           />
         </div>
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6 }}>Stroke size</div>
+        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Stroke Size</div>
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {strokeSizes.map((size) => (
             <button
               key={size}
               onClick={() => onStrokeSizeChange(size)}
               style={{
-                flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                borderRadius: 6, border: "none", cursor: "pointer",
+                flex: 1, height: 28, display: "flex", alignItems: "center",
+                justifyContent: "center", border: "none", cursor: "pointer",
+                borderRadius: 0,
                 backgroundColor: strokeSize === size ? "#eff6ff" : "#f3f4f6",
+                outline: strokeSize === size ? "2px solid #2563eb" : "none",
               }}
             >
-              <div style={{ width: Math.min(size + 6, 20), height: size, borderRadius: size, backgroundColor: strokeSize === size ? "#2563eb" : "#9ca3af" }} />
+              <div style={{
+                width: Math.min(size + 6, 20), height: size,
+                backgroundColor: strokeSize === size ? "#2563eb" : "#9ca3af",
+              }} />
             </button>
           ))}
         </div>
@@ -236,7 +313,11 @@ export default function RightPanel({
           <button
             key={emoji}
             onClick={() => onReaction(emoji)}
-            style={{ fontSize: 22, background: "none", border: "none", cursor: "pointer", padding: "2px", borderRadius: 6, transition: "transform 0.15s" }}
+            style={{
+              fontSize: 22, background: "none", border: "1px solid #e5e7eb",
+              cursor: "pointer", padding: "4px 6px", borderRadius: 0,
+              transition: "transform 0.15s",
+            }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.3)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
           >
@@ -249,21 +330,31 @@ export default function RightPanel({
 
       {sectionTitle("Backgrounds")}
 
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
         {backgrounds.map((bg) => (
           <button
             key={bg.id}
             onClick={() => onBackgroundChange(bg.id)}
-            title={bg.id}
+            title={bg.label}
             style={{
-              width: 32, height: 32, borderRadius: 6,
-              border: activeBackground === bg.id ? "2px solid #2563eb" : "2px solid #e5e7eb",
-              backgroundColor: bgColors[bg.id],
-              cursor: "pointer", fontSize: 9, fontWeight: 700,
-              color: bg.id === "chalkboard" ? "#ffffff" : "#374151",
+              display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 4, padding: 0, background: "none", cursor: "pointer",
+              border: "none",
             }}
           >
-            {bg.label}
+            <div style={{
+              width: "100%", height: 40, overflow: "hidden",
+              border: activeBackground === bg.id ? "2px solid #2563eb" : "2px solid #e5e7eb",
+              borderRadius: 0,
+            }}>
+              {bg.preview}
+            </div>
+            <span style={{
+              fontSize: 10, fontWeight: 600,
+              color: activeBackground === bg.id ? "#2563eb" : "#6b7280",
+            }}>
+              {bg.label}
+            </span>
           </button>
         ))}
       </div>
