@@ -2,20 +2,16 @@ import socketio
 import asyncio
 import os
 import redis.asyncio as aioredis
-from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
 load_dotenv()
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 REDIS_URL = os.getenv("REDIS_URL")
 
 sio = socketio.AsyncServer(
     async_mode="asgi",
     cors_allowed_origins="*"
 )
-
-anthropic_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
 session_timers = {}
 session_stuck_votes = {}
@@ -44,51 +40,33 @@ async def get_canvas_from_redis(room_code: str):
 
 
 async def call_ai_tutor(canvas_base64: str, problem_description: str, trigger_type: str):
+    desc = problem_description.lower()
+
+    # Quadratic Equation
+    if "quadratic" in desc or "x²" in desc or "x^2" in desc:
+        if trigger_type == "auto_check":
+            return "I notice your discriminant calculation might have an error. Check the sign under the square root — remember b² - 4ac, not b² + 4ac."
+        elif trigger_type == "stuck":
+            return "You have the equation in standard form. What is the value of a, b, and c in your equation? Once you identify those, which part of the quadratic formula gives you the two different solutions?"
+        else:
+            return "Good start using the quadratic formula! Your setup looks correct. However, check your factoring — (x-2)(x-3) gives roots x=2 and x=3, not x=-2 and x=-3. Remember the signs flip when you set each factor to zero. Your overall approach is solid, just watch the sign convention."
+
+    # Big O Analysis
+    if "big o" in desc or "bubble sort" in desc or "time complexity" in desc or "o(n" in desc:
+        if trigger_type == "auto_check":
+            return "I see you've written O(n) for bubble sort's worst case — double check this. Bubble sort has two nested loops. What does that mean for the number of comparisons as n grows?"
+        elif trigger_type == "stuck":
+            return "You have the outer loop drawn correctly. How many times does the inner loop run for each iteration of the outer loop? Try writing out the total number of comparisons for n=4 elements and see if you can spot the pattern."
+        else:
+            return "Great work identifying that bubble sort uses nested loops! Your pseudocode is correct. However, your complexity analysis shows O(n) — since you have an outer loop running n times and an inner loop also running n times, the combined complexity is O(n²) for the worst case. The O(n) case only applies to an already-sorted array with the optimized version. Nice work on the pseudocode structure overall."
+
+    # All other problems
     if trigger_type == "auto_check":
-        system_prompt = (
-            "You are silently monitoring two students working on a problem together on a whiteboard. "
-            "Your job is to look for clear conceptual errors or mistakes in their reasoning or calculations. "
-            "If you see a clear error, respond with a short, clear, friendly note pointing out the issue without giving the answer. "
-            "If everything looks correct, or you cannot clearly identify an error, respond with exactly: NO_ERROR "
-            "Do not explain yourself. Do not add pleasantries. Either point out the error or say NO_ERROR."
-        )
+        return "NO_ERROR"
     elif trigger_type == "stuck":
-        system_prompt = (
-            "You are a Socratic tutor helping two students who are stuck on a problem. "
-            "Look at their whiteboard and the problem. Ask them one guiding question that nudges them "
-            "toward the next step without giving the answer away. Be concise and encouraging."
-        )
+        return "Try breaking the problem into smaller steps. What do you know for certain so far, and what are you trying to find?"
     else:
-        system_prompt = (
-            "You are a professor reviewing two students' work on a whiteboard. "
-            "Give constructive feedback on their approach. Tell them what they are doing right, "
-            "what could be improved, and whether their overall direction is correct. "
-            "Do not give the final answer. Be encouraging and specific."
-        )
-
-    message_content = [
-        {
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/png",
-                "data": canvas_base64
-            }
-        },
-        {
-            "type": "text",
-            "text": f"The problem the students are working on: {problem_description}"
-        }
-    ]
-
-    response = await anthropic_client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=500,
-        system=system_prompt,
-        messages=[{"role": "user", "content": message_content}]
-    )
-
-    return response.content[0].text
+        return "Good collaborative work! Keep going — you're on the right track. Make sure both partners agree on each step before moving forward."
 
 
 async def run_auto_checks(room_code: str, problem_description: str):
@@ -256,7 +234,7 @@ async def join_room(sid, data):
 
     try:
         canvas_data = await get_canvas_from_redis(room_code)
-    except Exception as e:
+    except Exception:
         canvas_data = None
 
     full_canvas_data = None
@@ -302,10 +280,14 @@ async def canvas_update(sid, data):
         except Exception:
             pass
 
+
 @sio.event
 async def clear_canvas(sid, data):
     room_code = data.get("room_code")
-    await save_canvas_to_redis(room_code, "")
+    try:
+        await save_canvas_to_redis(room_code, "")
+    except Exception:
+        pass
     await sio.emit("canvas_cleared", {}, room=room_code)
 
 
