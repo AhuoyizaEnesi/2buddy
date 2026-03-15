@@ -23,10 +23,12 @@ interface LeftPanelProps {
   aiMessages: AIMessage[];
   onRequestReview: () => void;
   onVoteStuck: () => void;
+  onCheckAnswer: () => void;
   hasVotedStuck: boolean;
   stuckVotes: number;
   checksRemaining: number;
   canvasRef: any;
+  partnerVotedStuck: boolean;
 }
 
 export default function LeftPanel({
@@ -35,10 +37,12 @@ export default function LeftPanel({
   aiMessages,
   onRequestReview,
   onVoteStuck,
+  onCheckAnswer,
   hasVotedStuck,
   stuckVotes,
   checksRemaining,
   canvasRef,
+  partnerVotedStuck,
 }: LeftPanelProps) {
   const [previewVisible, setPreviewVisible] = useState(false);
 
@@ -74,10 +78,6 @@ export default function LeftPanel({
     }}>
       {title}
     </div>
-  );
-
-  const divider = () => (
-    <div style={{ height: 1, backgroundColor: "#f3f4f6", margin: "12px 0" }} />
   );
 
   return (
@@ -213,6 +213,16 @@ export default function LeftPanel({
           )}
         </div>
 
+        {partnerVotedStuck && !hasVotedStuck && (
+          <div style={{
+            marginBottom: 8, padding: "8px 10px",
+            backgroundColor: "#fef9c3", border: "1px solid #fde047",
+            fontSize: 12, color: "#854d0e", fontWeight: 600,
+          }}>
+            Your partner voted stuck — vote too to get a hint!
+          </div>
+        )}
+
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <button
             onClick={onRequestReview}
@@ -225,6 +235,19 @@ export default function LeftPanel({
           >
             Review our work
           </button>
+
+          <button
+            onClick={onCheckAnswer}
+            style={{
+              padding: "9px 0", backgroundColor: "#f0fdf4",
+              border: "1px solid #86efac", borderRadius: 0,
+              fontSize: 12, fontWeight: 700, color: "#166534", cursor: "pointer",
+              letterSpacing: "0.04em",
+            }}
+          >
+            ✓ Check our answer
+          </button>
+
           <button
             onClick={onVoteStuck}
             disabled={hasVotedStuck}

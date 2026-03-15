@@ -58,6 +58,7 @@ export default function BoardPage() {
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([]);
   const [stuckVotes, setStuckVotes] = useState(0);
   const [hasVotedStuck, setHasVotedStuck] = useState(false);
+  const [partnerVotedStuck, setPartnerVotedStuck] = useState(false);
   const [checksRemaining, setChecksRemaining] = useState(4);
   const [partnerCursor, setPartnerCursor] = useState<PartnerCursorData | null>(null);
   const [partnerConnected, setPartnerConnected] = useState(false);
@@ -188,9 +189,16 @@ export default function BoardPage() {
 
     socket.on("partner_voted_stuck", (data: { username: string; votes: number }) => {
       showNotification(`${data.username} voted we are stuck. Vote too to get a hint.`);
+      setPartnerVotedStuck(true);
     });
 
-    socket.on("stuck_vote_update", ({ votes }: { votes: number }) => setStuckVotes(votes));
+    socket.on("stuck_vote_update", ({ votes }: { votes: number }) => {
+      setStuckVotes(votes);
+      if (votes === 0) {
+        setHasVotedStuck(false);
+        setPartnerVotedStuck(false);
+      }
+    });
 
     return () => {
       socket.off("connect", handleConnect);
@@ -275,6 +283,14 @@ export default function BoardPage() {
     socketRef.current.emit("request_review", {
       room_code: session.room_code,
       canvas_data: base64,
+      problem_description: session.problem?.description || "",
+    });
+  }, [session]);
+
+  const handleCheckAnswer = useCallback(() => {
+    if (!session || !socketRef.current) return;
+    socketRef.current.emit("check_answer", {
+      room_code: session.room_code,
       problem_description: session.problem?.description || "",
     });
   }, [session]);
@@ -379,10 +395,12 @@ export default function BoardPage() {
           aiMessages={aiMessages}
           onRequestReview={handleRequestReview}
           onVoteStuck={handleVoteStuck}
+          onCheckAnswer={handleCheckAnswer}
           hasVotedStuck={hasVotedStuck}
           stuckVotes={stuckVotes}
           checksRemaining={checksRemaining}
           canvasRef={canvasRef}
+          partnerVotedStuck={partnerVotedStuck}
         />
 
         <div style={{
