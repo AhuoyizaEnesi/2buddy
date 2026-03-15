@@ -5,59 +5,26 @@ import { Tool, Background } from "./Toolbar";
 import VoiceChat from "./VoiceChat";
 
 interface RightPanelProps {
-  userColor: string;
-  userName: string;
-  partnerColor: string;
-  partnerName: string;
-  partnerConnected: boolean;
-  activeTool: Tool;
-  activeColor: string;
-  strokeSize: number;
-  activeBackground: Background;
-  onToolChange: (tool: Tool) => void;
-  onColorChange: (color: string) => void;
-  onStrokeSizeChange: (size: number) => void;
-  onBackgroundChange: (bg: Background) => void;
-  onReaction: (emoji: string) => void;
-  onImageUpload: (file: File) => void;
-  roomCode: string;
-  socket: any;
+  userColor: string; userName: string; partnerColor: string; partnerName: string;
+  partnerConnected: boolean; activeTool: Tool; activeColor: string; strokeSize: number;
+  activeBackground: Background; onToolChange: (tool: Tool) => void;
+  onColorChange: (color: string) => void; onStrokeSizeChange: (size: number) => void;
+  onBackgroundChange: (bg: Background) => void; onReaction: (emoji: string) => void;
+  onImageUpload: (file: File) => void; roomCode: string; socket: any;
 }
 
 const tools: { id: Tool; label: string; icon: React.ReactNode }[] = [
-  { id: "pen", label: "Pen", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" /></svg> },
-  { id: "eraser", label: "Eraser", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15.14 3c-.51 0-1.02.2-1.41.59L2.59 14.73c-.78.78-.78 2.05 0 2.83L5.03 20H8l9.73-9.73a2 2 0 000-2.83l-1.18-1.18V3h-1.41zM6.21 19l-1.8-1.8 5.37-5.37 1.8 1.8L6.21 19zM20 19h-8v2h8v-2z" /></svg> },
-  { id: "line", label: "Line", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z" /></svg> },
-  { id: "rectangle", label: "Rectangle", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" /></svg> },
-  { id: "circle", label: "Circle", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /></svg> },
-  { id: "text", label: "Text", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 4v3h5.5v12h3V7H19V4z" /></svg> },
-  { id: "sticky", label: "Sticky", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14l4-4h12c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z" /></svg> },
-  { id: "laser", label: "Laser", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> },
+  { id: "line", label: "Line", icon: <svg viewBox="0 0 22 22" fill="none" width="22" height="22"><line x1="3" y1="19" x2="19" y2="3" stroke="#5c4d37" strokeWidth="2" strokeLinecap="round" /></svg> },
+  { id: "rectangle", label: "Rect", icon: <svg viewBox="0 0 22 22" fill="none" width="22" height="22"><rect x="3" y="5" width="16" height="12" rx="1.5" stroke="#5c4d37" strokeWidth="1.8" /></svg> },
+  { id: "circle", label: "Circle", icon: <svg viewBox="0 0 22 22" fill="none" width="22" height="22"><circle cx="11" cy="11" r="7.5" stroke="#5c4d37" strokeWidth="1.8" /></svg> },
+  { id: "text", label: "Text", icon: <svg viewBox="0 0 22 22" fill="none" width="22" height="22"><path d="M4 5h14M11 5v12" stroke="#5c4d37" strokeWidth="1.8" strokeLinecap="round" /><path d="M7 17h8" stroke="#5c4d37" strokeWidth="1.8" strokeLinecap="round" /></svg> },
+  { id: "sticky", label: "Sticky", icon: <svg viewBox="0 0 22 22" fill="none" width="22" height="22"><path d="M4 4h14v10l-4 4H4z" fill="#f0e060" stroke="#c4a820" strokeWidth="1.5" strokeLinejoin="round" /></svg> },
+  { id: "laser", label: "Laser", icon: <svg viewBox="0 0 22 22" fill="none" width="22" height="22"><rect x="9" y="3" width="4" height="10" rx="2" fill="#c04040" stroke="#8a2020" strokeWidth="1.2" /><circle cx="11" cy="19" r="2" fill="#ff4040" opacity="0.85" /></svg> },
 ];
 
-const colors = ["#1a1a1a", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899"];
+const colors = ["#2d1f0a", "#b85c2a", "#e8a020", "#5a8a5a", "#3a5a8a", "#8a3a8a"];
 const strokeSizes = [2, 4, 6, 10, 16];
 const reactions = ["😀", "😂", "🤔", "😮", "👍", "👎"];
-
-const backgrounds: { id: Background; label: string; preview: React.ReactNode }[] = [
-  { id: "white", label: "Plain", preview: <div style={{ width: "100%", height: "100%", backgroundColor: "#ffffff", border: "1px solid #e5e7eb" }} /> },
-  { id: "dots", label: "Dots", preview: <div style={{ width: "100%", height: "100%", backgroundColor: "#f0f9ff", backgroundImage: "radial-gradient(circle, #93c5fd 1px, transparent 1px)", backgroundSize: "8px 8px" }} /> },
-  { id: "grid", label: "Grid", preview: <div style={{ width: "100%", height: "100%", backgroundColor: "#f0fdf4", backgroundImage: "linear-gradient(#bbf7d0 1px, transparent 1px), linear-gradient(90deg, #bbf7d0 1px, transparent 1px)", backgroundSize: "10px 10px" }} /> },
-  { id: "lined", label: "Lined", preview: <div style={{ width: "100%", height: "100%", backgroundColor: "#fefce8", backgroundImage: "linear-gradient(#fde68a 1px, transparent 1px)", backgroundSize: "100% 8px" }} /> },
-  {
-    id: "isometric", label: "Iso",
-    preview: (
-      <svg width="100%" height="100%" style={{ backgroundColor: "#faf5ff" }}>
-        <line x1="0" y1="14" x2="28" y2="0" stroke="#e9d5ff" strokeWidth="0.8" />
-        <line x1="0" y1="28" x2="42" y2="0" stroke="#e9d5ff" strokeWidth="0.8" />
-        <line x1="14" y1="42" x2="42" y2="0" stroke="#e9d5ff" strokeWidth="0.8" />
-        <line x1="0" y1="14" x2="42" y2="28" stroke="#e9d5ff" strokeWidth="0.8" />
-        <line x1="0" y1="28" x2="28" y2="42" stroke="#e9d5ff" strokeWidth="0.8" />
-      </svg>
-    ),
-  },
-  { id: "chalkboard", label: "Chalk", preview: <div style={{ width: "100%", height: "100%", backgroundColor: "#1a3a2a" }} /> },
-];
 
 export default function RightPanel({
   userColor, userName, partnerColor, partnerName, partnerConnected,
@@ -67,36 +34,36 @@ export default function RightPanel({
 }: RightPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const sectionTitle = (title: string) => (
-    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
-      {title}
+  const sectionLabel = (text: string) => (
+    <div style={{ fontFamily: "'Caveat', cursive", fontSize: 11, letterSpacing: "2px", color: "#7a6a52", textTransform: "uppercase", marginBottom: 8 }}>
+      {text}
     </div>
   );
 
-  const divider = () => (
-    <div style={{ height: 1, backgroundColor: "#f3f4f6", margin: "12px 0" }} />
-  );
+  const divider = () => <div style={{ height: 1, borderBottom: "1px dashed #c4b898", margin: "10px 0" }} />;
 
   return (
     <div style={{
-      width: 240, flexShrink: 0, display: "flex", flexDirection: "column",
-      backgroundColor: "#ffffff", borderLeft: "1px solid #e5e7eb",
-      overflowY: "auto", padding: "16px",
+      width: 200, flexShrink: 0, display: "flex", flexDirection: "column",
+      backgroundColor: "#e8e0cc", borderLeft: "2px solid #c4b898",
+      overflowY: "auto", padding: "12px 14px",
     }}>
-      {sectionTitle("Collaboration & Tools")}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", backgroundColor: "#f0f9ff", border: "1px solid #bfdbfe" }}>
-          <div style={{ width: 10, height: 10, backgroundColor: userColor }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#1e40af", flex: 1 }}>USER 1: {userName}</span>
-          <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700 }}>You</span>
+      {sectionLabel("Collaborators")}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: userColor, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Caveat', cursive", fontSize: 13, color: "#fff", flexShrink: 0 }}>
+            {userName[0]?.toUpperCase()}
+          </div>
+          <div style={{ fontFamily: "'Caveat', cursive", fontSize: 13, color: "#3d2f1a", flex: 1 }}>{userName}</div>
+          <span style={{ fontFamily: "'Caveat', cursive", fontSize: 10, backgroundColor: "#e8c87a", color: "#5c3d0a", padding: "1px 6px" }}>You</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", backgroundColor: partnerConnected ? "#f0fdf4" : "#f9fafb", border: `1px solid ${partnerConnected ? "#bbf7d0" : "#e5e7eb"}` }}>
-          <div style={{ width: 10, height: 10, backgroundColor: partnerConnected ? partnerColor : "#d1d5db" }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: partnerConnected ? "#166534" : "#9ca3af", flex: 1 }}>
-            USER 2: {partnerConnected ? partnerName : "Waiting..."}
-          </span>
-          {partnerConnected && <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 700 }}>Active</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, opacity: partnerConnected ? 1 : 0.5 }}>
+          <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: partnerConnected ? partnerColor : "#a89878", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Caveat', cursive", fontSize: 13, color: "#fff", flexShrink: 0 }}>
+            {partnerConnected ? partnerName[0]?.toUpperCase() : "?"}
+          </div>
+          <div style={{ fontFamily: "'Caveat', cursive", fontSize: 13, color: "#3d2f1a" }}>
+            {partnerConnected ? partnerName : "Waiting..."}
+          </div>
         </div>
       </div>
 
@@ -112,141 +79,90 @@ export default function RightPanel({
 
       {divider()}
 
-      {sectionTitle("Whiteboard Tools")}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4, marginBottom: 12 }}>
+      {sectionLabel("Whiteboard")}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
         {tools.map((tool) => (
           <button
             key={tool.id}
             onClick={() => onToolChange(tool.id)}
-            title={tool.label}
             style={{
-              display: "flex", flexDirection: "column", alignItems: "center",
-              justifyContent: "center", padding: "8px 4px",
-              border: activeTool === tool.id ? "2px solid #2563eb" : "1px solid #e5e7eb",
-              cursor: "pointer",
-              backgroundColor: activeTool === tool.id ? "#2563eb" : "#f9fafb",
-              color: activeTool === tool.id ? "#ffffff" : "#374151",
-              gap: 3, borderRadius: 0,
+              backgroundColor: activeTool === tool.id ? "#faf7f0" : "#faf7f0",
+              border: activeTool === tool.id ? "2px solid #b85c2a" : "1.5px solid #c4b898",
+              borderRadius: 3, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              padding: "6px 4px", gap: 3, cursor: "pointer",
             }}
           >
             {tool.icon}
-            <span style={{ fontSize: 9, fontWeight: 600 }}>{tool.label}</span>
+            <span style={{ fontFamily: "'Caveat', cursive", fontSize: 10, color: "#5c4d37" }}>{tool.label}</span>
           </button>
         ))}
 
         <button
           onClick={() => fileInputRef.current?.click()}
-          title="Image Upload"
-          style={{
-            display: "flex", flexDirection: "column", alignItems: "center",
-            justifyContent: "center", padding: "8px 4px",
-            border: "1px solid #e5e7eb", cursor: "pointer",
-            backgroundColor: "#f9fafb", color: "#374151", gap: 3, borderRadius: 0,
-          }}
+          style={{ backgroundColor: "#faf7f0", border: "1.5px solid #c4b898", borderRadius: 3, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "6px 4px", gap: 3, cursor: "pointer" }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+          <svg viewBox="0 0 22 22" fill="none" width="22" height="22">
+            <rect x="2" y="4" width="18" height="14" rx="2" stroke="#5c4d37" strokeWidth="1.6" fill="none" />
+            <circle cx="7.5" cy="8.5" r="2" fill="#e8c87a" stroke="#c4a820" strokeWidth="1" />
+            <path d="M2 15l5-5 4 4 3-3 6 5" stroke="#5c4d37" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span style={{ fontSize: 9, fontWeight: 600 }}>Image</span>
+          <span style={{ fontFamily: "'Caveat', cursive", fontSize: 10, color: "#5c4d37" }}>Image</span>
         </button>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onImageUpload(file);
-          }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Color</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-          {colors.map((color) => (
-            <button
-              key={color}
-              onClick={() => onColorChange(color)}
-              style={{
-                width: 24, height: 24,
-                border: activeColor === color ? "3px solid #2563eb" : "2px solid #e5e7eb",
-                backgroundColor: color, cursor: "pointer", padding: 0, borderRadius: 0,
-                transform: activeColor === color ? "scale(1.15)" : "scale(1)",
-                transition: "all 0.1s",
-              }}
-            />
-          ))}
-          <input
-            type="color"
-            value={activeColor}
-            onChange={(e) => onColorChange(e.target.value)}
-            style={{ width: 24, height: 24, border: "2px solid #e5e7eb", cursor: "pointer", padding: 0, borderRadius: 0 }}
-          />
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Stroke Size</div>
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {strokeSizes.map((size) => (
-            <button
-              key={size}
-              onClick={() => onStrokeSizeChange(size)}
-              style={{
-                flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                border: "none", cursor: "pointer", borderRadius: 0,
-                backgroundColor: strokeSize === size ? "#eff6ff" : "#f3f4f6",
-                outline: strokeSize === size ? "2px solid #2563eb" : "none",
-              }}
-            >
-              <div style={{ width: Math.min(size + 6, 20), height: size, backgroundColor: strokeSize === size ? "#2563eb" : "#9ca3af" }} />
-            </button>
-          ))}
-        </div>
+        <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) onImageUpload(file); }} />
       </div>
 
       {divider()}
 
-      {sectionTitle("Reaction System")}
-
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-        {reactions.map((emoji) => (
+      {sectionLabel("Color")}
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+        {colors.map((color) => (
           <button
-            key={emoji}
-            onClick={() => onReaction(emoji)}
+            key={color}
+            onClick={() => onColorChange(color)}
             style={{
-              fontSize: 22, background: "none", border: "1px solid #e5e7eb",
-              cursor: "pointer", padding: "4px 6px", borderRadius: 0, transition: "transform 0.15s",
+              width: 20, height: 20, borderRadius: "50%", backgroundColor: color,
+              border: activeColor === color ? "2px solid #3d2f1a" : "2px solid transparent",
+              cursor: "pointer", padding: 0,
+              transform: activeColor === color ? "scale(1.15)" : "scale(1)",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.3)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
+          />
+        ))}
+        <input type="color" value={activeColor} onChange={(e) => onColorChange(e.target.value)}
+          style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #c4b898", cursor: "pointer", padding: 0 }} />
+      </div>
+
+      {divider()}
+
+      {sectionLabel("Stroke")}
+      <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 10 }}>
+        {strokeSizes.map((size) => (
+          <button
+            key={size}
+            onClick={() => onStrokeSizeChange(size)}
+            style={{
+              flex: 1, height: 26, display: "flex", alignItems: "center", justifyContent: "center",
+              border: "none", cursor: "pointer", borderRadius: 2,
+              backgroundColor: strokeSize === size ? "#faf7f0" : "transparent",
+              outline: strokeSize === size ? "2px solid #b85c2a" : "none",
+            }}
           >
-            {emoji}
+            <div style={{ width: Math.min(size + 4, 16), height: size, backgroundColor: strokeSize === size ? "#b85c2a" : "#7a6a52", borderRadius: size }} />
           </button>
         ))}
       </div>
 
       {divider()}
 
-      {sectionTitle("Backgrounds")}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-        {backgrounds.map((bg) => (
+      {sectionLabel("Reactions")}
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+        {reactions.map((emoji) => (
           <button
-            key={bg.id}
-            onClick={() => onBackgroundChange(bg.id)}
-            title={bg.label}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 0, background: "none", cursor: "pointer", border: "none" }}
+            key={emoji}
+            onClick={() => onReaction(emoji)}
+            style={{ fontSize: 18, background: "none", border: "1px solid #c4b898", cursor: "pointer", padding: "2px 4px", borderRadius: 2 }}
           >
-            <div style={{ width: "100%", height: 40, overflow: "hidden", border: activeBackground === bg.id ? "2px solid #2563eb" : "2px solid #e5e7eb", borderRadius: 0 }}>
-              {bg.preview}
-            </div>
-            <span style={{ fontSize: 10, fontWeight: 600, color: activeBackground === bg.id ? "#2563eb" : "#6b7280" }}>
-              {bg.label}
-            </span>
+            {emoji}
           </button>
         ))}
       </div>

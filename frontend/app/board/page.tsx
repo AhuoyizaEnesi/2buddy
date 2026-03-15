@@ -52,9 +52,9 @@ export default function BoardPage() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [activeTool, setActiveTool] = useState<Tool>("pen");
-  const [activeColor, setActiveColor] = useState("#1a1a1a");
+  const [activeColor, setActiveColor] = useState("#2d1f0a");
   const [strokeSize, setStrokeSize] = useState(4);
-  const [activeBackground, setActiveBackground] = useState<Background>("dots");
+  const [activeBackground, setActiveBackground] = useState<Background>("lined");
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([]);
   const [stuckVotes, setStuckVotes] = useState(0);
   const [hasVotedStuck, setHasVotedStuck] = useState(false);
@@ -63,8 +63,8 @@ export default function BoardPage() {
   const [partnerCursor, setPartnerCursor] = useState<PartnerCursorData | null>(null);
   const [partnerConnected, setPartnerConnected] = useState(false);
   const [partnerName, setPartnerName] = useState("");
-  const [partnerColor, setPartnerColor] = useState("#1D9E75");
-  const [userColor] = useState("#7F77DD");
+  const [partnerColor, setPartnerColor] = useState("#5a8a5a");
+  const [userColor] = useState("#b85c2a");
   const [sessionTimer, setSessionTimer] = useState(1200);
   const [notification, setNotification] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
@@ -117,10 +117,7 @@ export default function BoardPage() {
       });
     };
 
-    if (socket.connected) {
-      handleConnect();
-    }
-
+    if (socket.connected) handleConnect();
     socket.on("connect", handleConnect);
 
     socket.on("room_joined", ({ canvas_data }: { canvas_data: string }) => {
@@ -230,7 +227,7 @@ export default function BoardPage() {
     if (!session || !socketRef.current) return;
     socketRef.current.emit("draw_stroke", {
       room_code: session.room_code,
-      stroke: { ...stroke, color: stroke.tool === "eraser" ? "#FFFFFF" : userColor },
+      stroke: { ...stroke, color: stroke.tool === "eraser" ? "#faf7f0" : userColor },
     });
   }, [session, userColor]);
 
@@ -322,9 +319,11 @@ export default function BoardPage() {
     return (
       <div style={{
         minHeight: "100vh", display: "flex", alignItems: "center",
-        justifyContent: "center", backgroundColor: "#f0f4ff",
+        justifyContent: "center", backgroundColor: "#f0ebe0",
       }}>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Loading session...</p>
+        <p style={{ fontFamily: "'Caveat', cursive", fontSize: 18, color: "#7a6a52" }}>
+          Loading session...
+        </p>
       </div>
     );
   }
@@ -332,27 +331,21 @@ export default function BoardPage() {
   return (
     <div style={{
       display: "flex", flexDirection: "column",
-      height: "100vh", backgroundColor: "#f0f4ff", overflow: "hidden",
+      height: "100vh", backgroundColor: "#f0ebe0", overflow: "hidden",
     }}>
+      {/* Navbar */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 20px", height: 56, backgroundColor: "#1e3a5f",
-        flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+        padding: "0 20px", height: 48, backgroundColor: "#3d2f1a",
+        flexShrink: 0, borderBottom: "2px solid #c4b898",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{
-              width: 32, height: 32, backgroundColor: "#2563eb",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontWeight: 700, color: "#fff", fontSize: 16,
-            }}>
-              2
-            </div>
-            <span style={{ color: "#ffffff", fontWeight: 700, fontSize: 18 }}>2Buddy</span>
+          <div style={{ fontFamily: "'Caveat', cursive", fontSize: 22, fontWeight: 700, color: "#fdf8f0" }}>
+            2<span style={{ color: "#b85c2a" }}>Buddy</span>
           </div>
-          <div style={{ width: 1, height: 24, backgroundColor: "rgba(255,255,255,0.2)" }} />
+          <div style={{ width: 1, height: 20, backgroundColor: "#c4b898" }} />
           <span style={{
-            color: "#ffffff", fontWeight: 600, fontSize: 14,
+            fontFamily: "'Caveat', cursive", fontSize: 16, color: "#c4b898",
             textTransform: "uppercase", letterSpacing: "0.08em",
           }}>
             {session.subject}
@@ -362,8 +355,8 @@ export default function BoardPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {notification && (
             <span style={{
-              fontSize: 12, backgroundColor: "rgba(255,255,255,0.15)",
-              color: "#ffffff", padding: "4px 12px",
+              fontFamily: "'Caveat', cursive", fontSize: 13,
+              backgroundColor: "rgba(255,255,255,0.15)", color: "#fdf8f0", padding: "4px 12px",
             }}>
               {notification}
             </span>
@@ -371,17 +364,18 @@ export default function BoardPage() {
           <button
             onClick={handleEndSession}
             style={{
-              padding: "6px 16px", backgroundColor: "#ef4444",
-              color: "#fff", border: "none", borderRadius: 0,
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
+              padding: "5px 16px", backgroundColor: "#b85c2a",
+              color: "#fdf8f0", border: "none",
+              fontFamily: "'Caveat', cursive", fontSize: 14, fontWeight: 600,
+              cursor: "pointer", borderRadius: 0,
             }}
           >
             {ending ? "Ending..." : "End Session"}
           </button>
           <div style={{
-            width: 32, height: 32, backgroundColor: userColor,
+            width: 28, height: 28, backgroundColor: userColor, borderRadius: "50%",
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff", fontWeight: 700, fontSize: 14,
+            color: "#fff", fontFamily: "'Caveat', cursive", fontWeight: 700, fontSize: 14,
           }}>
             {user?.username?.[0]?.toUpperCase()}
           </div>
@@ -419,12 +413,11 @@ export default function BoardPage() {
 
           <div style={{
             flex: 1,
-            margin: "64px 12px 12px 12px",
+            margin: "58px 0 0 0",
             overflow: "hidden",
-            boxShadow: "0 2px 16px rgba(0,0,0,0.1)",
             position: "relative",
             display: "flex",
-            border: "1px solid #e5e7eb",
+            border: "none",
           }}>
             <Canvas
               ref={canvasRef}
@@ -462,10 +455,11 @@ export default function BoardPage() {
               <button
                 onClick={() => setMathKeyboardOpen((v) => !v)}
                 style={{
-                  padding: "6px 16px", backgroundColor: "#ffffff",
-                  border: "1px solid #e5e7eb", fontSize: 12, fontWeight: 600,
-                  color: "#1e3a5f", cursor: "pointer", borderRadius: 0,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                  padding: "6px 18px", backgroundColor: "#faf7f0",
+                  border: "1.5px solid #c4b898",
+                  fontFamily: "'Caveat', cursive", fontSize: 14,
+                  color: "#3d2f1a", cursor: "pointer", borderRadius: 3,
+                  boxShadow: "0 2px 8px rgba(60,40,10,0.10)",
                 }}
               >
                 ∑ Math

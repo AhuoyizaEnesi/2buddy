@@ -37,7 +37,7 @@ export default function PartnerCursor({
       </svg>
       <div
         className="absolute left-4 top-0 text-xs text-white px-1.5 py-0.5 rounded-md whitespace-nowrap font-medium"
-        style={{ backgroundColor: color }}
+        style={{ backgroundColor: color, fontFamily: "'Caveat', cursive" }}
       >
         {username}
       </div>

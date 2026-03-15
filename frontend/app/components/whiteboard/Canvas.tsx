@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { Tool, Background } from "./Toolbar";
 import PartnerCursor from "./PartnerCursor";
+import { on } from "events";
 
 interface Point {
   x: number;
@@ -497,6 +498,48 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
       canvas.addEventListener("mouseup", onMouseUp);
       canvas.addEventListener("mouseleave", onMouseLeave);
 
+      const onTouchStart = (e: TouchEvent) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const mouseEvent = new MouseEvent("mousedown", {
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+          bubbles: true,
+        });
+        onMouseDown(mouseEvent);
+      };
+
+      const onTouchMove = (e: TouchEvent) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const mouseEvent = new MouseEvent("mousemove", {
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+          bubbles: true,
+        });
+        onMouseMove(mouseEvent);
+      };
+
+      const onTouchEnd = (e: TouchEvent) => {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        const mouseEvent = new MouseEvent("mouseup", {
+          clientX: Touch.clientX,
+          clientY: Touch.clientY,
+          bubbles: true,
+        });
+        onMouseUp(mouseEvent);
+      };
+
+
+
+
+
+      canvas.addEventListener("touchstart", onTouchStart, { passive: false});
+      canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+      canvas.addEventListener("touchend", onTouchEnd, { passive: false });
+
+
       const observer = new ResizeObserver(() => {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
@@ -524,6 +567,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         canvas.removeEventListener("mousemove", onMouseMove);
         canvas.removeEventListener("mouseup", onMouseUp);
         canvas.removeEventListener("mouseleave", onMouseLeave);
+        canvas.removeEventListener("touchstart", onTouchStart);
+        canvas.removeEventListener("touchmove", onTouchMove);
+        canvas.removeEventListener("touchend", onTouchEnd);
         observer.disconnect();
         laserTimersRef.current.forEach((t) => clearTimeout(t));
       };
