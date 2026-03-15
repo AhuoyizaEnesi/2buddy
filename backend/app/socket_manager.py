@@ -160,7 +160,6 @@ async def disconnect(sid):
 
 @sio.event
 async def join_lobby(sid, data):
-    print(f"join_lobby received: {data}")
     subject = data.get("subject", "").lower().strip()
     username = data.get("username", "")
 
@@ -249,16 +248,24 @@ async def join_room(sid, data):
     username = data.get("username")
     color = data.get("color", "#7F77DD")
     problem_description = data.get("problem_description", "No problem loaded")
+    print(f"join_room: {username} joining {room_code}")
 
     await sio.enter_room(sid, room_code)
     sid_to_room[sid] = room_code
     sid_to_user[sid] = username
 
-    canvas_data = await get_canvas_from_redis(room_code)
+    try:
+        canvas_data = await get_canvas_from_redis(room_code)
+    except Exception as e:
+        canvas_data = None
+
+    full_canvas_data = None
+    if canvas_data and len(canvas_data) > 100:
+        full_canvas_data = f"data:image/png;base64,{canvas_data}"
 
     await sio.emit("room_joined", {
         "room_code": room_code,
-        "canvas_data": canvas_data
+        "canvas_data": full_canvas_data
     }, to=sid)
 
     await sio.emit("partner_joined", {
@@ -289,9 +296,11 @@ async def cursor_move(sid, data):
 async def canvas_update(sid, data):
     room_code = data.get("room_code")
     canvas_data = data.get("canvas_data")
-    if room_code and canvas_data:
-        await save_canvas_to_redis(room_code, canvas_data)
-
+    if room_code and canvas_data and len(canvas_data) > 100:
+        try:
+            await save_canvas_to_redis(room_code, canvas_data)
+        except Exception:
+            pass
 
 @sio.event
 async def clear_canvas(sid, data):
@@ -330,6 +339,7 @@ async def request_review(sid, data):
 @sio.event
 async def vote_stuck(sid, data):
     room_code = data.get("room_code")
+    username = sid_to_user.get(sid, "Your partner")
 
     if room_code not in session_stuck_votes:
         session_stuck_votes[room_code] = set()
@@ -339,6 +349,7 @@ async def vote_stuck(sid, data):
     await sio.emit("stuck_vote_update", {
         "votes": len(session_stuck_votes[room_code])
     }, room=room_code)
+
     await sio.emit("partner_voted_stuck", {
         "username": username,
         "votes": len(session_stuck_votes[room_code])
@@ -362,3 +373,15 @@ async def vote_stuck(sid, data):
                 "type": "error",
                 "message": "AI tutor is unavailable right now."
             }, room=room_code)
+
+
+@sio.event
+async def webrtc_signal(sid, data):
+    target_sid = data.get("target_sid")
+    await sio.emit("webrtc_signal", data, to=target_sid)
+
+
+@sio.event
+async def webrtc_ready(sid, data):
+    room_code = data.get("room_code")
+    await sio.emit("partner_webrtc_ready", data, room=room_code, skip_sid=sid)
