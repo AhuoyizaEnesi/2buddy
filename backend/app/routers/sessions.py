@@ -6,13 +6,30 @@ from app import models, schemas, auth
 from typing import List
 import random
 import string
-import time
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 def generate_room_code(length=6):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
+
+def get_problem_for_subject(subject: str, db: Session):
+    if subject == "mathematics":
+        problem = db.query(models.Problem).filter(
+            models.Problem.subject == "mathematics",
+            models.Problem.title == "Quadratic Equation"
+        ).first()
+    elif subject == "computer science":
+        problem = db.query(models.Problem).filter(
+            models.Problem.subject == "computer science",
+            models.Problem.title == "Big O Analysis"
+        ).first()
+    else:
+        problem = db.query(models.Problem).filter(
+            models.Problem.subject == subject
+        ).order_by(func.random()).first()
+    return problem
 
 
 @router.post("/create-direct", response_model=schemas.SessionOut)
@@ -29,12 +46,7 @@ def create_direct_session(
     ).first():
         room_code = generate_room_code()
 
-    problem = (
-        db.query(models.Problem)
-        .filter(models.Problem.subject == subject)
-        .order_by(func.random())
-        .first()
-    )
+    problem = get_problem_for_subject(subject, db)
 
     new_session = models.Session(
         room_code=room_code,
@@ -120,12 +132,7 @@ def join_or_create_session(
     ).first():
         room_code = generate_room_code()
 
-    problem = (
-        db.query(models.Problem)
-        .filter(models.Problem.subject == subject)
-        .order_by(func.random())
-        .first()
-    )
+    problem = get_problem_for_subject(subject, db)
 
     new_session = models.Session(
         room_code=room_code,
