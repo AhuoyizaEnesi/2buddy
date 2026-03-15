@@ -27,6 +27,8 @@ export default function VoiceChat({
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const isInitiatorRef = useRef(false);
+  const isActiveRef = useRef(false);
+  const partnerReadyRef = useRef(false);
 
   const iceServers = {
     iceServers: [
@@ -47,6 +49,9 @@ export default function VoiceChat({
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null;
     }
+    isActiveRef.current = false;
+    isInitiatorRef.current = false;
+    partnerReadyRef.current = false;
     setConnected(false);
     setPartnerReady(false);
     setIsActive(false);
@@ -58,7 +63,7 @@ export default function VoiceChat({
     const pc = new RTCPeerConnection(iceServers);
 
     pc.onicecandidate = (e) => {
-      if (e.candidate) {
+      if (e.candidate && socket) {
         socket.emit("webrtc_signal", {
           room_code: roomCode,
           type: "ice_candidate",
@@ -86,6 +91,7 @@ export default function VoiceChat({
   }, [roomCode, username, socket]);
 
   const startVoiceChat = useCallback(async () => {
+    if (!socket) return;
     try {
       setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -95,14 +101,12 @@ export default function VoiceChat({
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
       peerConnectionRef.current = pc;
 
+      isActiveRef.current = true;
       setIsActive(true);
 
-      socket.emit("webrtc_ready", {
-        room_code: roomCode,
-        username,
-      });
+      socket.emit("webrtc_ready", { room_code: roomCode, username });
 
-      if (partnerReady) {
+      if (partnerReadyRef.current) {
         isInitiatorRef.current = true;
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
@@ -116,16 +120,18 @@ export default function VoiceChat({
     } catch (err: any) {
       setError("Microphone access denied. Please allow microphone permissions.");
       setIsActive(false);
+      isActiveRef.current = false;
     }
-  }, [roomCode, username, socket, partnerReady, createPeerConnection]);
+  }, [roomCode, username, socket, createPeerConnection]);
 
   useEffect(() => {
     if (!socket) return;
 
-    const handlePartnerReady = async (data: { username: string }) => {
+    const handlePartnerReady = async () => {
+      partnerReadyRef.current = true;
       setPartnerReady(true);
 
-      if (isActive && peerConnectionRef.current && !isInitiatorRef.current) {
+      if (isActiveRef.current && peerConnectionRef.current && !isInitiatorRef.current) {
         isInitiatorRef.current = true;
         const pc = peerConnectionRef.current;
         const offer = await pc.createOffer();
@@ -149,6 +155,7 @@ export default function VoiceChat({
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             localStreamRef.current = stream;
+            isActiveRef.current = true;
             setIsActive(true);
           } catch {
             return;
@@ -174,10 +181,14 @@ export default function VoiceChat({
           from: username,
         });
       } else if (data.type === "answer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        if (pc.signalingState === "have-local-offer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        }
       } else if (data.type === "ice_candidate") {
         try {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          if (pc.remoteDescription) {
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          }
         } catch {}
       }
     };
@@ -189,12 +200,10 @@ export default function VoiceChat({
       socket.off("partner_webrtc_ready", handlePartnerReady);
       socket.off("webrtc_signal", handleSignal);
     };
-  }, [socket, roomCode, username, isActive, createPeerConnection]);
+  }, [socket, roomCode, username, createPeerConnection]);
 
   useEffect(() => {
-    return () => {
-      cleanup();
-    };
+    return () => { cleanup(); };
   }, [cleanup]);
 
   const handleToggle = () => {
@@ -250,22 +259,22 @@ export default function VoiceChat({
             </span>
           </div>
           {isActive && connected && (
-            <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 600 }}>
-              Live
-            </span>
+            <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 600 }}>Live</span>
           )}
         </div>
 
         <div style={{ display: "flex", gap: 6 }}>
           <button
             onClick={handleToggle}
-            disabled={!partnerConnected}
+            disabled={!partnerConnected || !socket}
             style={{
               flex: 1, padding: "8px 0",
               backgroundColor: isActive ? "#ef4444" : "#1e3a5f",
               color: "#fff", border: "none", fontSize: 12,
-              fontWeight: 700, cursor: partnerConnected ? "pointer" : "not-allowed",
-              opacity: partnerConnected ? 1 : 0.5, borderRadius: 0,
+              fontWeight: 700,
+              cursor: partnerConnected && socket ? "pointer" : "not-allowed",
+              opacity: partnerConnected && socket ? 1 : 0.5,
+              borderRadius: 0,
               display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
             }}
           >

@@ -47,6 +47,7 @@ export default function BoardPage() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session");
   const canvasRef = useRef<CanvasRef>(null);
+  const socketRef = useRef<any>(null);
   const user = getUser();
 
   const [session, setSession] = useState<Session | null>(null);
@@ -66,6 +67,7 @@ export default function BoardPage() {
   const [sessionTimer, setSessionTimer] = useState(1200);
   const [notification, setNotification] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
+  const [socket, setSocket] = useState<any>(null);
   const [mathKeyboardOpen, setMathKeyboardOpen] = useState(false);
   const [reactions, setReactions] = useState<{ id: number; emoji: string; x: number; y: number }[]>([]);
   const reactionIdRef = useRef(0);
@@ -76,11 +78,10 @@ export default function BoardPage() {
   };
 
   const handleReaction = useCallback((emoji: string) => {
-    if (!session) return;
-    const socket = connectSocket();
+    if (!session || !socketRef.current) return;
     const x = 20 + Math.random() * 60;
     const y = 20 + Math.random() * 60;
-    socket.emit("reaction", { room_code: session.room_code, emoji, x, y });
+    socketRef.current.emit("reaction", { room_code: session.room_code, emoji, x, y });
     const id = reactionIdRef.current++;
     setReactions((prev) => [...prev, { id, emoji, x, y }]);
     setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 3000);
@@ -94,24 +95,37 @@ export default function BoardPage() {
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/login"); return; }
     if (!sessionId) { router.push("/lobby"); return; }
-    sessionsAPI.getSession(sessionId).then((res) => setSession(res.data));
+    sessionsAPI.getSession(sessionId).then((res) => {
+      setSession(res.data);
+      socketRef.current = connectSocket();
+      setSocket(socketRef.current);
+    });
   }, [sessionId, router]);
 
   useEffect(() => {
-    if (!session || !user) return;
-    const socket = connectSocket();
+    if (!session || !user || !socketRef.current) return;
 
-    socket.on("connect", () => {
+    const socket = socketRef.current;
+
+    const handleConnect = () => {
       socket.emit("join_room", {
         room_code: session.room_code,
         username: user.username,
         color: userColor,
         problem_description: session.problem?.description || "No problem loaded",
       });
-    });
+    };
+
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    socket.on("connect", handleConnect);
 
     socket.on("room_joined", ({ canvas_data }: { canvas_data: string }) => {
-      if (canvas_data && canvasRef.current) canvasRef.current.loadFromDataUrl(canvas_data);
+      if (canvas_data && canvas_data.length > 100 && canvasRef.current) {
+        canvasRef.current.loadFromDataUrl(canvas_data);
+      }
     });
 
     socket.on("partner_joined", ({ username, color }: { username: string; color: string }) => {
@@ -122,7 +136,6 @@ export default function BoardPage() {
     });
 
     socket.on("partner_disconnected", ({ username }: { username: string }) => {
-      setPartnerConnected(false);
       showNotification(`${username} disconnected`);
     });
 
@@ -180,7 +193,7 @@ export default function BoardPage() {
     socket.on("stuck_vote_update", ({ votes }: { votes: number }) => setStuckVotes(votes));
 
     return () => {
-      socket.off("connect");
+      socket.off("connect", handleConnect);
       socket.off("room_joined");
       socket.off("partner_joined");
       socket.off("partner_disconnected");
@@ -192,7 +205,6 @@ export default function BoardPage() {
       socket.off("ai_feedback");
       socket.off("partner_voted_stuck");
       socket.off("stuck_vote_update");
-      disconnectSocket();
     };
   }, [session, user, userColor]);
 
@@ -207,35 +219,33 @@ export default function BoardPage() {
   }, []);
 
   const handleStroke = useCallback((stroke: any) => {
-    if (!session) return;
-    const socket = connectSocket();
-    socket.emit("draw_stroke", {
+    if (!session || !socketRef.current) return;
+    socketRef.current.emit("draw_stroke", {
       room_code: session.room_code,
       stroke: { ...stroke, color: stroke.tool === "eraser" ? "#FFFFFF" : userColor },
     });
   }, [session, userColor]);
 
   const handleCursorMove = useCallback((x: number, y: number) => {
-    if (!session || !user) return;
-    const socket = connectSocket();
-    socket.emit("cursor_move", {
+    if (!session || !user || !socketRef.current) return;
+    socketRef.current.emit("cursor_move", {
       room_code: session.room_code, x, y,
       color: userColor, username: user.username,
     });
   }, [session, user, userColor]);
 
   const handleCanvasUpdate = useCallback((dataUrl: string) => {
-    if (!session) return;
-    const socket = connectSocket();
+    if (!session || !socketRef.current) return;
+    if (!dataUrl || dataUrl === "data:," || dataUrl.length < 100) return;
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-    socket.emit("canvas_update", { room_code: session.room_code, canvas_data: base64 });
+    if (!base64 || base64.length < 100) return;
+    socketRef.current.emit("canvas_update", { room_code: session.room_code, canvas_data: base64 });
   }, [session]);
 
   const handleClear = useCallback(() => {
-    if (!session) return;
+    if (!session || !socketRef.current) return;
     canvasRef.current?.clearCanvas();
-    const socket = connectSocket();
-    socket.emit("clear_canvas", { room_code: session.room_code });
+    socketRef.current.emit("clear_canvas", { room_code: session.room_code });
   }, [session]);
 
   const handleUndo = useCallback(() => { canvasRef.current?.undo(); }, []);
@@ -259,11 +269,10 @@ export default function BoardPage() {
   }, []);
 
   const handleRequestReview = useCallback(() => {
-    if (!session) return;
-    const socket = connectSocket();
+    if (!session || !socketRef.current) return;
     const dataUrl = canvasRef.current?.getDataUrl() || "";
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-    socket.emit("request_review", {
+    socketRef.current.emit("request_review", {
       room_code: session.room_code,
       canvas_data: base64,
       problem_description: session.problem?.description || "",
@@ -271,12 +280,11 @@ export default function BoardPage() {
   }, [session]);
 
   const handleVoteStuck = useCallback(() => {
-    if (!session || hasVotedStuck) return;
+    if (!session || hasVotedStuck || !socketRef.current) return;
     setHasVotedStuck(true);
-    const socket = connectSocket();
     const dataUrl = canvasRef.current?.getDataUrl() || "";
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-    socket.emit("vote_stuck", {
+    socketRef.current.emit("vote_stuck", {
       room_code: session.room_code,
       username: user?.username,
       canvas_data: base64,
@@ -332,18 +340,6 @@ export default function BoardPage() {
             textTransform: "uppercase", letterSpacing: "0.08em",
           }}>
             {session.subject}
-          </span>
-        </div>
-
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          backgroundColor: "#22c55e", padding: "6px 16px",
-        }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-          </svg>
-          <span style={{ color: "#ffffff", fontWeight: 600, fontSize: 13 }}>
-            {user?.username} {partnerConnected ? `& ${partnerName}` : "& waiting..."}
           </span>
         </div>
 
@@ -482,6 +478,8 @@ export default function BoardPage() {
           onBackgroundChange={setActiveBackground}
           onReaction={handleReaction}
           onImageUpload={handleImageUpload}
+          roomCode={session.room_code}
+          socket={socket}
         />
       </div>
 

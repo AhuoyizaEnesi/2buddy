@@ -106,6 +106,17 @@ const getBackgroundStyle = (bg: Background): React.CSSProperties => {
   }
 };
 
+const getBgFillColor = (bg: Background): string | null => {
+  if (bg === "chalkboard") return "#1a3a2a";
+  if (bg === "white") return "#ffffff";
+  return null;
+};
+
+const getEraserColor = (bg: Background): string => {
+  if (bg === "chalkboard") return "#1a3a2a";
+  return "#ffffff";
+};
+
 const Canvas = forwardRef<CanvasRef, CanvasProps>(
   (
     {
@@ -129,8 +140,13 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
     const activeToolRef = useRef<Tool>(activeTool);
     const activeColorRef = useRef<string>(activeColor);
     const strokeSizeRef = useRef<number>(strokeSize);
+    const activeBackgroundRef = useRef<Background>(activeBackground);
     const laserTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
     const laserIdRef = useRef(0);
+
+    const onStrokeRef = useRef(onStroke);
+    const onCursorMoveRef = useRef(onCursorMove);
+    const onCanvasUpdateRef = useRef(onCanvasUpdate);
 
     const [textInput, setTextInput] = useState<{
       x: number;
@@ -146,6 +162,10 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
     useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
     useEffect(() => { activeColorRef.current = activeColor; }, [activeColor]);
     useEffect(() => { strokeSizeRef.current = strokeSize; }, [strokeSize]);
+    useEffect(() => { activeBackgroundRef.current = activeBackground; }, [activeBackground]);
+    useEffect(() => { onStrokeRef.current = onStroke; }, [onStroke]);
+    useEffect(() => { onCursorMoveRef.current = onCursorMove; }, [onCursorMove]);
+    useEffect(() => { onCanvasUpdateRef.current = onCanvasUpdate; }, [onCanvasUpdate]);
 
     const getCtx = () => {
       const canvas = canvasRef.current;
@@ -177,9 +197,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
       ctx.save();
 
       if (stroke.tool === "eraser") {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.strokeStyle = "rgba(0,0,0,1)";
-        ctx.fillStyle = "rgba(0,0,0,1)";
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = getEraserColor(activeBackgroundRef.current);
+        ctx.fillStyle = getEraserColor(activeBackgroundRef.current);
       } else {
         ctx.globalCompositeOperation = "source-over";
         ctx.strokeStyle = stroke.color;
@@ -243,8 +263,15 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         if (!canvas || !ctx) return;
         saveHistory();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const bgFill = getBgFillColor(activeBackgroundRef.current);
+        if (bgFill) {
+          ctx.save();
+          ctx.globalCompositeOperation = "source-over";
+          ctx.fillStyle = bgFill;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.restore();
+        }
         setStickyNotes([]);
-        onCanvasUpdate(canvas.toDataURL("image/png"));
       },
       undo: () => {
         const canvas = canvasRef.current;
@@ -252,17 +279,24 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         if (!canvas || !ctx || historyRef.current.length === 0) return;
         const prev = historyRef.current.pop()!;
         ctx.putImageData(prev, 0, 0);
-        onCanvasUpdate(canvas.toDataURL("image/png"));
       },
       getDataUrl: () => canvasRef.current?.toDataURL("image/png") || "",
       loadFromDataUrl: (dataUrl: string) => {
-        if (!dataUrl) return;
+        if (!dataUrl || dataUrl.length < 100) return;
         const canvas = canvasRef.current;
         const ctx = getCtx();
         if (!canvas || !ctx) return;
         const img = new Image();
         img.onload = () => {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const bgFill = getBgFillColor(activeBackgroundRef.current);
+          if (bgFill) {
+            ctx.save();
+            ctx.globalCompositeOperation = "source-over";
+            ctx.fillStyle = bgFill;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+          }
           ctx.drawImage(img, 0, 0);
         };
         img.src = dataUrl;
@@ -271,8 +305,6 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         const ctx = getCtx();
         if (!ctx) return;
         drawStroke(ctx, stroke);
-        const canvas = canvasRef.current;
-        if (canvas) onCanvasUpdate(canvas.toDataURL("image/png"));
       },
       drawImage: (dataUrl: string) => {
         const canvas = canvasRef.current;
@@ -281,15 +313,10 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         const img = new Image();
         img.onload = () => {
           saveHistory();
-          const scale = Math.min(
-            canvas.width / img.width,
-            canvas.height / img.height,
-            1
-          );
+          const scale = Math.min(canvas.width / img.width, canvas.height / img.height, 1);
           const x = (canvas.width - img.width * scale) / 2;
           const y = (canvas.height - img.height * scale) / 2;
           ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-          onCanvasUpdate(canvas.toDataURL("image/png"));
         };
         img.src = dataUrl;
       },
@@ -306,8 +333,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
           text,
         };
         drawStroke(ctx, stroke);
-        onStroke(stroke);
-        onCanvasUpdate(canvas.toDataURL("image/png"));
+        onStrokeRef.current(stroke);
       },
     }));
 
@@ -318,6 +344,14 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
 
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
+      const initCtx = canvas.getContext("2d");
+      if (initCtx) {
+        const bgFill = getBgFillColor(activeBackgroundRef.current);
+        if (bgFill) {
+          initCtx.fillStyle = bgFill;
+          initCtx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
 
       const onMouseDown = (e: MouseEvent) => {
         e.preventDefault();
@@ -362,13 +396,10 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
           const ctx = canvas.getContext("2d");
           if (ctx) {
             ctx.save();
-            if (tool === "eraser") {
-              ctx.globalCompositeOperation = "destination-out";
-              ctx.fillStyle = "rgba(0,0,0,1)";
-            } else {
-              ctx.globalCompositeOperation = "source-over";
-              ctx.fillStyle = color;
-            }
+            ctx.globalCompositeOperation = "source-over";
+            ctx.fillStyle = tool === "eraser"
+              ? getEraserColor(activeBackgroundRef.current)
+              : color;
             ctx.beginPath();
             ctx.arc(pos.x, pos.y, size / 2, 0, Math.PI * 2);
             ctx.fill();
@@ -385,7 +416,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
 
       const onMouseMove = (e: MouseEvent) => {
         e.preventDefault();
-        onCursorMove(e.clientX, e.clientY);
+        onCursorMoveRef.current(e.clientX, e.clientY);
 
         const tool = activeToolRef.current;
 
@@ -394,14 +425,11 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
           const x = e.clientX - rect.left;
           const y = e.clientY - rect.top;
           const id = laserIdRef.current++;
-
           setLaserDots((prev) => [...prev.slice(-20), { x, y, id }]);
-
           const timer = setTimeout(() => {
             setLaserDots((prev) => prev.filter((d) => d.id !== id));
             laserTimersRef.current.delete(id);
           }, 600);
-
           laserTimersRef.current.set(id, timer);
           return;
         }
@@ -421,13 +449,10 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
           if (len < 2) return;
 
           ctx.save();
-          if (stroke.tool === "eraser") {
-            ctx.globalCompositeOperation = "destination-out";
-            ctx.strokeStyle = "rgba(0,0,0,1)";
-          } else {
-            ctx.globalCompositeOperation = "source-over";
-            ctx.strokeStyle = stroke.color;
-          }
+          ctx.globalCompositeOperation = "source-over";
+          ctx.strokeStyle = stroke.tool === "eraser"
+            ? getEraserColor(activeBackgroundRef.current)
+            : stroke.color;
           ctx.lineWidth = stroke.tool === "eraser" ? stroke.size * 3 : stroke.size;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
@@ -459,8 +484,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         e.preventDefault();
         if (!isDrawing.current || !currentStroke.current) return;
         isDrawing.current = false;
-        onStroke(currentStroke.current);
-        onCanvasUpdate(canvas.toDataURL("image/png"));
+        onStrokeRef.current(currentStroke.current);
         currentStroke.current = null;
       };
 
@@ -482,6 +506,14 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         }
         canvas.width = container.clientWidth;
         canvas.height = container.clientHeight;
+        const bgFill = getBgFillColor(activeBackgroundRef.current);
+        if (bgFill) {
+          ctx.save();
+          ctx.globalCompositeOperation = "source-over";
+          ctx.fillStyle = bgFill;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.restore();
+        }
         if (imageData) ctx.putImageData(imageData, 0, 0);
       });
 
@@ -495,7 +527,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         observer.disconnect();
         laserTimersRef.current.forEach((t) => clearTimeout(t));
       };
-    }, [drawStroke, onStroke, onCursorMove, onCanvasUpdate]);
+    }, []);
 
     const handleTextSubmit = () => {
       if (!textInput.value.trim()) {
@@ -517,8 +549,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         text: textInput.value,
       };
       drawStroke(ctx, stroke);
-      onStroke(stroke);
-      onCanvasUpdate(canvas.toDataURL("image/png"));
+      onStrokeRef.current(stroke);
       setTextInput({ x: 0, y: 0, visible: false, value: "" });
     };
 
@@ -558,7 +589,6 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
             height: "100%",
             display: "block",
             cursor: cursorMap[activeTool] || "crosshair",
-            background: "transparent",
           }}
         />
 
@@ -609,14 +639,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
                 }}
                 onBlur={() => setEditingSticky(null)}
                 style={{
-                  width: "100%",
-                  minHeight: 80,
-                  border: "none",
-                  background: "transparent",
-                  outline: "none",
-                  fontSize: 13,
-                  resize: "none",
-                  fontFamily: "sans-serif",
+                  width: "100%", minHeight: 80, border: "none",
+                  background: "transparent", outline: "none",
+                  fontSize: 13, resize: "none", fontFamily: "sans-serif",
                   color: "#1a1a1a",
                 }}
                 placeholder="Type your note..."
@@ -625,11 +650,8 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
               <div
                 onClick={() => setEditingSticky(note.id)}
                 style={{
-                  fontSize: 13,
-                  color: "#1a1a1a",
-                  minHeight: 80,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
+                  fontSize: 13, color: "#1a1a1a", minHeight: 80,
+                  whiteSpace: "pre-wrap", wordBreak: "break-word",
                 }}
               >
                 {note.text || (
@@ -644,15 +666,9 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
                 setStickyNotes((prev) => prev.filter((n) => n.id !== note.id))
               }
               style={{
-                position: "absolute",
-                top: 4,
-                right: 6,
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 14,
-                color: "#6b7280",
-                lineHeight: 1,
+                position: "absolute", top: 4, right: 6,
+                background: "none", border: "none", cursor: "pointer",
+                fontSize: 14, color: "#6b7280", lineHeight: 1,
               }}
             >
               x
