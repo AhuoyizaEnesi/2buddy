@@ -10,6 +10,7 @@ import { Tool, Background } from "@/app/components/whiteboard/Toolbar";
 import LeftPanel from "@/app/components/whiteboard/LeftPanel";
 import RightPanel from "@/app/components/whiteboard/RightPanel";
 import FloatingToolbar from "@/app/components/whiteboard/FloatingToolbar";
+import MathKeyboard from "@/app/components/whiteboard/MathKeyboard";
 
 interface AIMessage {
   type: "auto_check" | "review" | "stuck" | "error" | "thinking";
@@ -65,6 +66,7 @@ export default function BoardPage() {
   const [sessionTimer, setSessionTimer] = useState(1200);
   const [notification, setNotification] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
+  const [mathKeyboardOpen, setMathKeyboardOpen] = useState(false);
   const [reactions, setReactions] = useState<{ id: number; emoji: string; x: number; y: number }[]>([]);
   const reactionIdRef = useRef(0);
 
@@ -83,6 +85,11 @@ export default function BoardPage() {
     setReactions((prev) => [...prev, { id, emoji, x, y }]);
     setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 3000);
   }, [session]);
+
+  const handleMathInsert = useCallback((symbol: string) => {
+    if (!canvasRef.current) return;
+    canvasRef.current.insertText(symbol);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/login"); return; }
@@ -157,12 +164,19 @@ export default function BoardPage() {
           setChecksRemaining((c) => Math.max(0, c - 1));
           showNotification("AI tutor has a note for you");
         }
-        return [...filtered, { type: data.type, message: data.message, check_number: data.check_number, timestamp: new Date() }];
+        return [...filtered, {
+          type: data.type,
+          message: data.message,
+          check_number: data.check_number,
+          timestamp: new Date(),
+        }];
       });
     });
+
     socket.on("partner_voted_stuck", (data: { username: string; votes: number }) => {
       showNotification(`${data.username} voted we are stuck. Vote too to get a hint.`);
     });
+
     socket.on("stuck_vote_update", ({ votes }: { votes: number }) => setStuckVotes(votes));
 
     return () => {
@@ -176,8 +190,8 @@ export default function BoardPage() {
       socket.off("reaction");
       socket.off("ai_thinking");
       socket.off("ai_feedback");
-      socket.off("stuck_vote_update");
       socket.off("partner_voted_stuck");
+      socket.off("stuck_vote_update");
       disconnectSocket();
     };
   }, [session, user, userColor]);
@@ -426,6 +440,29 @@ export default function BoardPage() {
                 {r.emoji}
               </div>
             ))}
+
+            <div style={{
+              position: "absolute", bottom: 16,
+              left: "50%", transform: "translateX(-50%)", zIndex: 100,
+            }}>
+              <button
+                onClick={() => setMathKeyboardOpen((v) => !v)}
+                style={{
+                  padding: "6px 16px", backgroundColor: "#ffffff",
+                  border: "1px solid #e5e7eb", fontSize: 12, fontWeight: 600,
+                  color: "#1e3a5f", cursor: "pointer", borderRadius: 0,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                }}
+              >
+                ∑ Math
+              </button>
+              {mathKeyboardOpen && (
+                <MathKeyboard
+                  onInsert={handleMathInsert}
+                  onClose={() => setMathKeyboardOpen(false)}
+                />
+              )}
+            </div>
           </div>
         </div>
 

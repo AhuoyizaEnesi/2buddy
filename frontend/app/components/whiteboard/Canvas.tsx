@@ -63,6 +63,7 @@ export interface CanvasRef {
   loadFromDataUrl: (dataUrl: string) => void;
   applyRemoteStroke: (stroke: Stroke) => void;
   drawImage: (dataUrl: string) => void;
+  insertText: (text: string) => void;
 }
 
 const STICKY_COLORS = ["#fef08a", "#bbf7d0", "#bfdbfe", "#fecaca", "#e9d5ff"];
@@ -291,6 +292,22 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
           onCanvasUpdate(canvas.toDataURL("image/png"));
         };
         img.src = dataUrl;
+      },
+      insertText: (text: string) => {
+        const canvas = canvasRef.current;
+        const ctx = getCtx();
+        if (!canvas || !ctx) return;
+        saveHistory();
+        const stroke: Stroke = {
+          tool: "text",
+          color: activeColorRef.current,
+          size: strokeSizeRef.current,
+          points: [{ x: canvas.width / 2 - 20, y: canvas.height / 2 }],
+          text,
+        };
+        drawStroke(ctx, stroke);
+        onStroke(stroke);
+        onCanvasUpdate(canvas.toDataURL("image/png"));
       },
     }));
 
