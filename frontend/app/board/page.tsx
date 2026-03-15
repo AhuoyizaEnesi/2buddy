@@ -160,7 +160,9 @@ export default function BoardPage() {
         return [...filtered, { type: data.type, message: data.message, check_number: data.check_number, timestamp: new Date() }];
       });
     });
-
+    socket.on("partner_voted_stuck", (data: { username: string; votes: number }) => {
+      showNotification(`${data.username} voted we are stuck. Vote too to get a hint.`);
+    });
     socket.on("stuck_vote_update", ({ votes }: { votes: number }) => setStuckVotes(votes));
 
     return () => {
@@ -175,6 +177,7 @@ export default function BoardPage() {
       socket.off("ai_thinking");
       socket.off("ai_feedback");
       socket.off("stuck_vote_update");
+      socket.off("partner_voted_stuck");
       disconnectSocket();
     };
   }, [session, user, userColor]);
