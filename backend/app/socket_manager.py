@@ -1,13 +1,8 @@
 import socketio
 import asyncio
-import base64
-import json
 import os
 import redis.asyncio as aioredis
 from anthropic import AsyncAnthropic
-from sqlalchemy.orm import Session
-from app.database import SessionLocal
-from app import models
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,6 +21,9 @@ session_timers = {}
 session_stuck_votes = {}
 session_check_counts = {}
 lobby_users = {}
+sid_to_user = {}
+sid_to_room = {}
+sid_to_lobby_subjects = {}
 
 
 async def get_redis():
@@ -96,24 +94,18 @@ async def call_ai_tutor(canvas_base64: str, problem_description: str, trigger_ty
 async def run_auto_checks(room_code: str, problem_description: str):
     check_interval = 5 * 60
     max_checks = 4
-
     session_check_counts[room_code] = 0
 
     for i in range(max_checks):
         await asyncio.sleep(check_interval)
-
         if room_code not in session_timers:
             break
-
         canvas_data = await get_canvas_from_redis(room_code)
         if not canvas_data:
             continue
-
         session_check_counts[room_code] = i + 1
-
         try:
             result = await call_ai_tutor(canvas_data, problem_description, "auto_check")
-
             if result.strip() != "NO_ERROR":
                 await sio.emit("ai_feedback", {
                     "type": "auto_check",
@@ -148,29 +140,27 @@ async def connect(sid, environ):
 @sio.event
 async def disconnect(sid):
     print(f"Client disconnected: {sid}")
-    r = await get_redis()
-    room_code = await r.get(f"sid_room:{sid}")
-    username = await r.get(f"sid_user:{sid}")
-    subject = await r.get(f"sid_lobby:{sid}")
+
+    room_code = sid_to_room.get(sid)
+    username = sid_to_user.get(sid)
 
     if room_code:
         await sio.leave_room(sid, room_code)
         await sio.emit("partner_disconnected", {"username": username}, room=room_code)
-        await r.delete(f"sid_room:{sid}")
-        await r.delete(f"sid_user:{sid}")
+        sid_to_room.pop(sid, None)
+        sid_to_user.pop(sid, None)
 
-    if subject:
+    subjects_joined = sid_to_lobby_subjects.pop(sid, [])
+    for subject in subjects_joined:
         if subject in lobby_users and sid in lobby_users[subject]:
             del lobby_users[subject][sid]
         await sio.leave_room(sid, f"lobby_{subject}")
-        await r.delete(f"sid_lobby:{sid}")
         await broadcast_lobby(subject)
-
-    await r.aclose()
 
 
 @sio.event
 async def join_lobby(sid, data):
+    print(f"join_lobby received: {data}")
     subject = data.get("subject", "").lower().strip()
     username = data.get("username", "")
 
@@ -187,9 +177,10 @@ async def join_lobby(sid, data):
         "joined_at": asyncio.get_event_loop().time()
     }
 
-    r = await get_redis()
-    await r.set(f"sid_lobby:{sid}", subject)
-    await r.aclose()
+    if sid not in sid_to_lobby_subjects:
+        sid_to_lobby_subjects[sid] = []
+    if subject not in sid_to_lobby_subjects[sid]:
+        sid_to_lobby_subjects[sid].append(subject)
 
     await broadcast_lobby(subject)
 
@@ -203,9 +194,8 @@ async def leave_lobby(sid, data):
 
     await sio.leave_room(sid, f"lobby_{subject}")
 
-    r = await get_redis()
-    await r.delete(f"sid_lobby:{sid}")
-    await r.aclose()
+    if sid in sid_to_lobby_subjects and subject in sid_to_lobby_subjects[sid]:
+        sid_to_lobby_subjects[sid].remove(subject)
 
     await broadcast_lobby(subject)
 
@@ -228,15 +218,18 @@ async def accept_pair_request(sid, data):
     from_sid = data.get("from_sid")
     username = data.get("username")
     subject = data.get("subject")
+    session_id = data.get("session_id")
 
     await sio.emit("pair_accepted", {
         "from_sid": from_sid,
         "accepted_by": username,
-        "subject": subject
+        "subject": subject,
+        "session_id": session_id
     }, to=from_sid)
 
     await sio.emit("pair_confirmed", {
-        "subject": subject
+        "subject": subject,
+        "session_id": session_id
     }, to=sid)
 
 
@@ -258,11 +251,8 @@ async def join_room(sid, data):
     problem_description = data.get("problem_description", "No problem loaded")
 
     await sio.enter_room(sid, room_code)
-
-    r = await get_redis()
-    await r.set(f"sid_room:{sid}", room_code)
-    await r.set(f"sid_user:{sid}", username)
-    await r.aclose()
+    sid_to_room[sid] = room_code
+    sid_to_user[sid] = username
 
     canvas_data = await get_canvas_from_redis(room_code)
 
@@ -340,7 +330,6 @@ async def request_review(sid, data):
 @sio.event
 async def vote_stuck(sid, data):
     room_code = data.get("room_code")
-    username = data.get("username")
 
     if room_code not in session_stuck_votes:
         session_stuck_votes[room_code] = set()
@@ -350,6 +339,10 @@ async def vote_stuck(sid, data):
     await sio.emit("stuck_vote_update", {
         "votes": len(session_stuck_votes[room_code])
     }, room=room_code)
+    await sio.emit("partner_voted_stuck", {
+        "username": username,
+        "votes": len(session_stuck_votes[room_code])
+    }, room=room_code, skip_sid=sid)
 
     if len(session_stuck_votes[room_code]) >= 2:
         session_stuck_votes[room_code] = set()
