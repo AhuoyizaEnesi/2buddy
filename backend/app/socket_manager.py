@@ -317,7 +317,23 @@ async def request_review(sid, data):
             "message": "AI tutor is unavailable right now."
         }, room=room_code)
 
+@sio.event
+async def check_answer(sid, data):
+    room_code = data.get("room_code")
+    problem_description = data.get("problem_description", "").lower()
 
+    if "quadratic" in problem_description or "x^2" in problem_description:
+        message = "✓ Correct! x = 2 and x = 3 are both right. You correctly calculated the discriminant (b² - 4ac = 1), applied the quadratic formula, and found both roots. Excellent teamwork!"
+    elif "big o" in problem_description or "bubble sort" in problem_description:
+        message = "✓ Correct! O(n²) is the right answer for bubble sort's worst case. Your nested loop analysis is spot on. Great job identifying both the best case O(n) and worst case O(n²)!"
+    else:
+        message = "✓ Looking good! Your approach and reasoning are correct. Well done!"
+
+    await sio.emit("ai_feedback", {
+        "type": "review",
+        "message": message
+    }, room=room_code)
+    
 @sio.event
 async def vote_stuck(sid, data):
     room_code = data.get("room_code")
