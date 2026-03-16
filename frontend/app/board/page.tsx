@@ -275,11 +275,9 @@ export default function BoardPage() {
 
   const handleRequestReview = useCallback(() => {
     if (!session || !socketRef.current) return;
-    const dataUrl = canvasRef.current?.getDataUrl() || "";
-    const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
     socketRef.current.emit("request_review", {
       room_code: session.room_code,
-      canvas_data: base64,
+      canvas_data: "",
       problem_description: session.problem?.description || "",
     });
   }, [session]);
@@ -295,12 +293,10 @@ export default function BoardPage() {
   const handleVoteStuck = useCallback(() => {
     if (!session || hasVotedStuck || !socketRef.current) return;
     setHasVotedStuck(true);
-    const dataUrl = canvasRef.current?.getDataUrl() || "";
-    const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
     socketRef.current.emit("vote_stuck", {
       room_code: session.room_code,
       username: user?.username,
-      canvas_data: base64,
+      canvas_data: "",
       problem_description: session.problem?.description || "",
     });
   }, [session, hasVotedStuck, user]);

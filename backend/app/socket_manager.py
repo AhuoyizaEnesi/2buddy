@@ -359,7 +359,8 @@ async def vote_stuck(sid, data):
         problem_description = data.get("problem_description", "")
 
         await sio.emit("ai_thinking", {"type": "stuck"}, room=room_code)
-
+        await asyncio.sleep(0.5)
+        
         try:
             result = await call_ai_tutor(canvas_data, problem_description, "stuck")
             await sio.emit("ai_feedback", {
